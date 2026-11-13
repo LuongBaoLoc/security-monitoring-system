@@ -1,0 +1,116 @@
+PHAN CONG CONG VIEC DO AN 14 TUAN - 3 THANH VIEN
+De tai: Xay dung he thong giam sat va bao dong an ninh thong minh (Security Monitoring System)
+
+PHAN VAI THANH VIEN
+- Thanh vien 1 - Backend/Database: FastAPI, REST API, xac thuc, PostgreSQL, MQTT backend, Docker va tich hop he thong.
+- Thanh vien 2 - Frontend: giao dien dashboard, cac man hinh quan ly, ket noi REST API/WebSocket va hien thi du lieu.
+- Thanh vien 3 - AI/IoT: YOLOv8, xu ly camera/frame, ESP32, cam bien, firmware va giao tiep MQTT.
+- Ca 3 cung tham gia phan tich, thong nhat API/topic/payload, tich hop, danh gia ket qua va viet bao cao. Phan cong nay la ke hoach du kien; dieu chinh theo tien do thuc te cua nhom.
+
+KE HOACH THEO TUAN
+
+Tuan 1 - Khoi dong va xac dinh yeu cau
+TV1: Lap danh sach chuc nang backend, du kien mo hinh du lieu va API.
+TV2: Khao sat doi tuong su dung, phac thao dashboard va luong thao tac.
+TV3: Khao sat camera, YOLO, ESP32 va cac cam bien co the dung.
+Ca nhom: Chot muc tieu, pham vi, vai tro va ke hoach 14 tuan.
+Dau ra: De cuong, yeu cau chuc nang/phi chuc nang, lich cong viec.
+
+Tuan 2 - Phan tich nghiep vu va kien truc
+TV1: Thiet ke kien truc backend, database va phan quyen.
+TV2: Ve wireframe cac man hinh Tong quan, Camera, Canh bao, IoT va Lich su.
+TV3: Chon phuong an nhan dien, luong xu ly frame va danh sach phan cung.
+Ca nhom: Thong nhat contract REST, WebSocket va MQTT.
+Dau ra: So do kien truc, ERD ban dau, wireframe, API/topic contract.
+
+Tuan 3 - Thiet ke chi tiet va chuan bi moi truong
+TV1: Tao project FastAPI, cau hinh SQLAlchemy/PostgreSQL, cau truc module.
+TV2: Tao bo khung frontend, quy uoc component, mau sac va responsive.
+TV3: Cai dat moi truong AI, thu model YOLO; lap so do dau noi ESP32/cam bien.
+Ca nhom: Tao repository, quy uoc branch/commit, bien moi truong va huong dan chay.
+Dau ra: Bo khung chay duoc, tai lieu thiet lap moi truong.
+
+Tuan 4 - Database va giao dien tong quan
+TV1: Tao bang User, Camera, Device, Detection, Alert, Sensor va log.
+TV2: Dung layout dashboard, sidebar, header, the thong ke va bieu do.
+TV3: Thu doc camera/frame va chay inference YOLO tren anh mau.
+Ca nhom: Review schema va giao dien voi du lieu mau.
+Dau ra: Database schema ban dau, dashboard prototype, ket qua thu YOLO.
+
+Tuan 5 - Xac thuc va quan ly camera
+TV1: Lam dang nhap JWT, API nguoi dung va CRUD camera.
+TV2: Lam man hinh dang nhap, danh sach camera, tim kiem/loc va form them sua.
+TV3: Chuan hoa camera_id, thu RTSP va quy trinh lay frame.
+Ca nhom: Chot cach bao mat thong tin RTSP va mapping camera.
+Dau ra: Dang nhap va quan ly camera co the tich hop.
+
+Tuan 6 - Su kien AI va trang giam sat
+TV1: Lam API tiep nhan detection, luu su kien va truy van lich su.
+TV2: Lam trang giam sat camera/AI va bang su kien.
+TV3: Xu ly ket qua YOLO, confidence, nhan doi tuong va gui detection len backend.
+Ca nhom: Thu luong anh/frame -> inference -> API.
+Dau ra: Detection duoc luu va hien thi tren giao dien.
+
+Tuan 7 - Canh bao va thong ke
+TV1: Lam quy tac tao alert, muc do, chong trung va API xu ly alert.
+TV2: Lam trang canh bao, loc trang thai/muc do va thong ke tong quan.
+TV3: Tinh chinh nguong detection, ghi nhan cac truong hop sai/bo sot.
+Ca nhom: Thong nhat quy tac canh bao va kịch ban demo.
+Dau ra: Canh bao tu detection va giao dien xu ly canh bao.
+
+Tuan 8 - ESP32 va thu thap du lieu IoT
+TV1: Lam model/API tiep nhan telemetry, luu gia tri cam bien va trang thai thiet bi.
+TV2: Lam trang danh sach IoT, trang thai online/offline va chi tiet thiet bi.
+TV3: Lap trinh ESP32 doc PIR/MQ-2 va publish du lieu MQTT.
+Ca nhom: Thong nhat device_code, topic va payload.
+Dau ra: Du lieu ESP32/MQTT co the duoc backend tiep nhan va hien thi.
+
+Tuan 9 - Dieu khien thiet bi va WebSocket
+TV1: Lam adapter MQTT cho telemetry, command va ACK; phat su kien WebSocket.
+TV2: Ket noi WebSocket, cap nhat canh bao/trang thai gan thoi gian thuc.
+TV3: Nhan command tren ESP32, dieu khien relay/buzzer/lock va publish ACK.
+Ca nhom: Thu command_id, timeout, loi ket noi va trang thai that.
+Dau ra: Luong dieu khien co phan hoi ACK; khong danh dau thanh cong truoc ACK.
+
+Tuan 10 - Tich hop cac module
+TV1: Tich hop API, database, MQTT, xu ly loi va kiem tra phan quyen.
+TV2: Noi cac trang frontend voi API, xu ly loading/error/empty state.
+TV3: Noi AI service va ESP32 voi backend, xu ly mat ket noi.
+Ca nhom: Chay end-to-end cac luong camera, detection, alert va IoT.
+Dau ra: Ban tich hop dau tien va danh sach loi can xu ly.
+
+Tuan 11 - Bao mat va hoan thien chuc nang
+TV1: Ra soat JWT, role, validate input, secrets, log va backup du lieu.
+TV2: Ra soat responsive, accessibility co ban, thong bao loi va thao tac giao dien.
+TV3: Ra soat token AI, MQTT, gioi han payload, reconnect va an toan dau noi phan cung.
+Ca nhom: Khac phuc cac loi uu tien cao.
+Dau ra: Ban ung dung hoan thien chuc nang va checklist bao mat.
+
+Tuan 12 - Kiem thu va danh gia
+TV1: Kiem tra API, database, phan trang va cac truong hop loi.
+TV2: Kiem tra cac luong giao dien tren desktop/mobile va du lieu rong.
+TV3: Danh gia detection tren bo anh/video thu, kiem tra sensor va command ACK.
+Ca nhom: Kiem thu tich hop, ghi ket qua, loi con lai va gioi han.
+Dau ra: Bien ban/ma tran kiem thu va danh sach sua loi.
+
+Tuan 13 - Sua loi, dong goi va chuan bi demo
+TV1: Hoan thien Docker Compose, cau hinh .env mau, README va khoi phuc du lieu demo.
+TV2: Don dep giao dien, chuan bi kich ban demo va anh chup man hinh.
+TV3: Chuan bi model, camera/frame mau, ESP32 va kich ban mat ket noi/ACK.
+Ca nhom: Chay thu demo tren may muc tieu va sua loi cuoi.
+Dau ra: Ban demo co the cai dat, tai lieu chay va kich ban demo.
+
+Tuan 14 - Bao cao va bao ve
+TV1: Viet phan backend, database, API va quy trinh trien khai.
+TV2: Viet phan giao dien, luong su dung va hinh anh minh hoa.
+TV3: Viet phan AI, IoT, ket qua thu nghiem va gioi han.
+Ca nhom: Tong hop bao cao, slide, tap demo, phan cong thuyet trinh va luyen bao ve.
+Dau ra: Bao cao cuoi, slide, ma nguon va demo san sang.
+
+PHAN CHIA SAN PHAM CHINH
+- Thanh vien 1: backend/app, database, API, auth, MQTT adapter, Docker va tai lieu API.
+- Thanh vien 2: frontend, dashboard, cac trang quan ly, ket noi REST/WebSocket va tai lieu giao dien.
+- Thanh vien 3: ai-service, YOLO/model, firmware ESP32, cam bien va tai lieu IoT.
+- Ca nhom: Yeu cau, kien truc, contract tich hop, kiem thu end-to-end, README, bao cao va demo.
+
+Luu y: Tuan va dau ra tren la ke hoach tham khao. Nhom can ghi nhan cong viec da lam theo thuc te, khong dung ke hoach nay de khang dinh cac hang muc da hoan thanh.
