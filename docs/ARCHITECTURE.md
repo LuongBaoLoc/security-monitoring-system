@@ -1,45 +1,94 @@
-# Phân tích kiến trúc Module 3
+# Thiết kế Kiến trúc Hệ thống & Mô hình MVC (Tuần 2 – Tuần 3)
 
-## Phạm vi
+## 1. Sơ đồ Kiến trúc Tổng thể
 
-Module 3 là lớp điều phối và trình bày: Backend API, PostgreSQL, web dashboard, tích hợp AI/IoT, cùng observability. AI inference và firmware ESP32 thuộc thành viên khác; giao tiếp qua contract ổn định, không import code nội bộ của nhau.
+Hệ thống được thiết kế theo kiến trúc phân tán gồm 3 khối chính (**AI Service**, **IoT Edge ESP32**, **Core Backend + Web Dashboard**) giao tiếp qua các giao thức chuẩn (`HTTP REST`, `WebSocket`, `MQTT`):
 
-## Kiến trúc logic
+```mermaid
+flowchart LR
+    subgraph Edge_AI["Khối AI (Thành viên 3)"]
+        CAM["Camera IP / Ảnh mẫu"] --> YOLO["AI Service (FastAPI + YOLOv8)"]
+    end
 
-```text
-Browser dashboard --HTTPS/REST + WebSocket--> FastAPI
-AI service --------HTTPS POST /detections----> FastAPI
-ESP32 <-------------MQTT broker-------------> MQTT adapter của backend
-FastAPI ------------SQLAlchemy---------------> PostgreSQL
-Browser <-----------HLS/WebRTC--------------- MediaMTX (tùy chọn)
+    subgraph Edge_IoT["Khối IoT (Thành viên 3)"]
+        ESP["ESP32 (PIR, MQ-2, Relay, Buzzer, Lock)"]
+    end
+
+    subgraph Broker["Message Broker"]
+        MQTT["Mosquitto MQTT (:1883)"]
+    end
+
+    subgraph Core_Backend["Khối Backend & Database (Thành viên 1)"]
+        API["FastAPI Backend (:8000)"]
+        DB[("PostgreSQL (:5432)")]
+        API <--> DB
+    end
+
+    subgraph Client_UI["Khối Giao diện (Thành viên 2)"]
+        WEB["Web Dashboard (Nginx :8080)"]
+    end
+
+    YOLO -- "POST /api/detections (Bearer Token)" --> API
+    ESP <-- "Pub/Sub: sensor, status, command, ack" --> MQTT
+    MQTT <--> API
+    WEB <-- "REST API (/api/*) + WebSocket (/ws/dashboard)" --> API
 ```
 
-Backend được chia theo trách nhiệm: `routers` xử lý giao thức HTTP, `schemas` xác thực đầu vào/đầu ra, `services` chứa nghiệp vụ, `models` ánh xạ dữ liệu, `database` quản lý session, `mqtt` xử lý telemetry/command/ACK và `websocket` phân phối sự kiện dashboard. Không đặt toàn bộ nghiệp vụ trong `main.py`.
+---
 
-## Luồng và ranh giới tin cậy
+## 2. Ánh xạ Kiến trúc MVC / Layered trong Dự án
 
-- Mật khẩu lưu dưới dạng hash; token có thời hạn và secret chỉ lấy từ biến môi trường. Mọi route quản trị/điều khiển phải kiểm tra role phía server.
-- RTSP URL có thể chứa thông tin xác thực: chỉ trả metadata đã che credential; không ghi URL thô vào log hoặc dashboard.
-- Telemetry và detection là dữ liệu không tin cậy: kiểm tra schema, kích thước, phạm vi số và timestamp trước khi ghi.
-- Việc phát hiện người/vật không tự bật relay/còi. Quy tắc cảnh báo phải cấu hình riêng; hành động điều khiển vật lý cần người có quyền và ACK.
-- Lệnh MQTT dùng `command_id` tương quan ACK, timeout thành `timeout/unknown` chứ không báo thành công giả.
-- Ảnh sự kiện lưu trong vùng upload riêng, giới hạn loại/kích thước; API chỉ phát đường dẫn hoặc URL đã kiểm soát.
+Để đảm bảo tách biệt trách nhiệm (Separation of Concerns), mã nguồn được chia thành các tầng rõ ràng:
 
-## Quyết định dữ liệu
+| Thành phần MVC | Thư mục / Tệp nguồn | Trách nhiệm chính |
+|---|---|---|
+| **Model (Dữ liệu & Ràng buộc)** | `backend/app/models/__init__.py`<br>`backend/app/schemas/__init__.py`<br>`backend/app/database/base.py`<br>`database/init.sql`, `database/seed.sql` | Định nghĩa 8 bảng ORM (`User`, `Camera`, `Device`, `Sensor`, `DetectionEvent`, `Alert`, `DeviceLog`, `SystemLog`), quản lý kết nối SQLAlchemy và kiểm tra dữ liệu đầu vào bằng Pydantic. |
+| **View (Giao diện hiển thị)** | `frontend/index.html`<br>`frontend/css/style.css` | Bố cục 10 màn hình của trung tâm giám sát SmartSecure, hệ thống thẻ thống kê, biểu đồ cột/tròn, bảng dữ liệu, modal và thiết kế đáp ứng (responsive). |
+| **Controller & Service (Điều phối & Nghiệp vụ)** | `backend/app/routers/__init__.py`<br>`backend/app/services/__init__.py`<br>`backend/app/websocket/__init__.py`<br>`backend/app/mqtt/__init__.py`<br>`frontend/js/app.js`, `frontend/js/api.js` | Xử lý request HTTP, xác thực/phân quyền JWT, ẩn mật khẩu RTSP, đánh giá quy tắc tạo cảnh báo & chống trùng, đồng bộ MQTT command/ACK, phát sự kiện WebSocket và cập nhật DOM phía trình duyệt. |
 
-- PostgreSQL là nguồn dữ liệu chuẩn; `device_code` là định danh MQTT ổn định, còn `devices.id` là khóa nội bộ.
-- `detection_events` lưu mọi sự kiện AI; `alerts` là bản ghi nghiệp vụ riêng, có thể không tạo nếu policy không khớp hoặc bị gộp chống lặp.
-- `sensors` giữ lịch sử telemetry theo từng loại; trạng thái mới nhất của thiết bị có thể được denormalize trong `devices` để truy vấn dashboard nhanh.
-- `device_logs` ghi lệnh và ACK/error; `system_logs` ghi hành động người dùng có ý nghĩa kiểm toán.
-- Thời gian lưu UTC (`TIMESTAMPTZ`); client trình bày theo múi giờ địa phương.
-- Schema production tiến hóa bằng Alembic migration; `init.sql`/`seed.sql` phục vụ bootstrap/demo cục bộ.
+---
 
-## Các điểm phải chốt khi tích hợp
+## 3. Thiết kế Phân quyền (RBAC — Thành viên 1)
 
-1. Broker host/port, TLS hoặc VPN, thông tin xác thực và quyền ACL cho từng topic.
-2. Payload ESP32: kiểu timestamp, ngưỡng MQ-2/đơn vị, cấu trúc trạng thái cảm biến và ACK/error.
-3. Cách AI xác thực (service token), quy ước camera ID, event type, timezone và nơi lưu ảnh.
-4. MediaMTX stream path và giao thức browser (WebRTC/HLS); RTSP không phát trực tiếp trong thẻ video.
-5. Policy cảnh báo, thời lượng gộp sự kiện, thời gian chờ ACK và quyền Operator/Admin.
+| Chức năng / Endpoint | `OPERATOR` | `ADMIN` | `AI_SERVICE_TOKEN` |
+|---|:---:|:---:|:---:|
+| Đăng nhập (`POST /api/auth/login`), xem hồ sơ (`GET /api/auth/me`) | Có | Có | — |
+| Xem danh sách Camera, Thiết bị, Cảm biến, Cảnh báo, Thống kê, Nhật ký | Có | Có | — |
+| Xử lý cảnh báo (`PUT /api/alerts/{id}/resolve`) | Có | Có | — |
+| Gửi lệnh điều khiển thiết bị IoT (`POST /api/devices/{id}/command`) | Có | Có | — |
+| Thêm / Sửa / Xóa Camera (`POST`, `PUT`, `DELETE /api/cameras/*`) | Không (`403`) | **Có** | — |
+| Gửi sự kiện phát hiện AI (`POST /api/detections`) | Có | Có | **Có** |
 
-Contract mặc định đề xuất được ghi trong `API_DOCUMENTATION.md`; cần Thành viên 1/2 xác nhận các điểm trên trước khi coi là tương thích thiết bị thật.
+---
+
+## 4. Phương án Nhận diện AI & Luồng Xử lý Frame (Thành viên 3)
+
+```mermaid
+sequenceDiagram
+    participant Cam as Camera / Frame Source
+    participant AI as AI Service (YOLOv8)
+    participant BE as FastAPI Backend
+    participant DB as PostgreSQL
+    participant UI as Web Dashboard
+
+    Cam->>AI: Đọc frame ảnh (capture_frame_bytes / upload)
+    AI->>AI: Kiểm tra định dạng & kích thước (<= 8MB)
+    AI->>AI: Chạy YOLOv8 inference (conf >= CONFIDENCE_THRESHOLD)
+    loop Với mỗi đối tượng phát hiện
+        AI->>BE: POST /api/detections (camera_id, object_type, confidence, event_type)
+        BE->>DB: Lưu bản ghi detection_events & cập nhật camera.last_seen
+        alt Đủ ngưỡng cảnh báo & không bị trùng lặp
+            BE->>DB: Tạo bản ghi alerts (WARNING / CRITICAL)
+            BE-->>UI: WebSocket broadcast ("alert.created")
+        end
+        BE-->>UI: WebSocket broadcast ("detection.created")
+    end
+```
+
+---
+
+## 5. Ranh giới Tin cậy & Quy tắc An toàn
+
+- Mật khẩu người dùng chỉ lưu dưới dạng băm (`bcrypt`); khóa bí mật JWT và token dịch vụ lấy từ biến môi trường (`.env`).
+- Đường dẫn `rtsp_url` của camera có thể chứa `username:password@`: hàm `redact_rtsp_url()` trong `app/services` luôn loại bỏ thông tin xác thực trước khi trả JSON cho giao diện.
+- Phát hiện của AI không tự ý kích hoạt còi hú hay mở khóa cửa; mọi lệnh điều khiển vật lý đều đi qua `POST /api/devices/{device_id}/command`, gắn `command_id` và chờ bản tin `ack` từ ESP32.

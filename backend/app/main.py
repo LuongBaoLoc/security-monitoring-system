@@ -1,87 +1,52 @@
+from contextlib import asynccontextmanager
 
-import os
-from pathlib import Path
-
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
-
-import cv2
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
-ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
+from app.core.config import settings
+from app.database.base import Base
+from app.database.connection import SessionLocal, engine
+from app.models import User
+from app.routers import api, dashboard_socket
+from app.services import seed_demo_data_if_empty
 
-app = FastAPI(title="SmartSecure Camera API")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5500",
-        "http://127.0.0.1:5500"
-    ],
-    allow_methods=["GET"],
-    allow_headers=["*"]
-)
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    # A configurable bootstrap account is created only when both values are supplied.
+    import os
+    username, password = os.getenv("BOOTSTRAP_ADMIN_USERNAME"), os.getenv("BOOTSTRAP_ADMIN_PASSWORD")
+    with SessionLocal() as db:
+        if username and password:
+            from app.core.security import hash_password
+            if not db.query(User).filter(User.username == username).first():
+                db.add(User(username=username, password_hash=hash_password(password), full_name="System Administrator", role="ADMIN"))
+                db.commit()
+        if settings.seed_demo_data:
+            seed_demo_data_if_empty(db)
+    from app.mqtt import start_mqtt, stop_mqtt
+    import asyncio
+    start_mqtt(asyncio.get_running_loop())
+    yield
+    stop_mqtt()
+
+
+app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.include_router(api)
+
+
+@app.get("/")
+def root():
+    return {"name": settings.app_name, "docs": "/docs", "health": "/api/system/health"}
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "camera"}
+    return {"status": "ok"}
 
 
-@app.get("/api/camera/status")
-def camera_status():
-    return {
-        "camera_id": "CAM-01",
-        "configured": bool(os.getenv("CAMERA_RTSP_URL"))
-    }
-
-
-def generate_frames():
-    url = os.getenv("CAMERA_RTSP_URL", "").strip()
-    cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-
-    try:
-        if not cap.isOpened():
-            print("Không thể kết nối camera RTSP")
-            return
-
-        while True:
-            success, frame = cap.read()
-
-            if not success:
-                print("Mất tín hiệu camera")
-                break
-
-            success, encoded = cv2.imencode(
-                ".jpg", frame,
-                [cv2.IMWRITE_JPEG_QUALITY, 75]
-            )
-
-            if success:
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n\r\n"
-                    + encoded.tobytes()
-                    + b"\r\n"
-                )
-
-    finally:
-        cap.release()
-
-
-@app.get("/api/camera/stream")
-def camera_stream():
-    if not os.getenv("CAMERA_RTSP_URL"):
-        raise HTTPException(
-            status_code=503,
-            detail="Chưa cấu hình camera RTSP"
-        )
-
-    return StreamingResponse(
-        generate_frames(),
-        media_type="multipart/x-mixed-replace; boundary=frame",
-        headers={"Cache-Control": "no-store"}
-    )
+@app.websocket("/ws/dashboard")
+async def ws_dashboard(websocket: WebSocket, token: str):
+    await dashboard_socket(websocket, token)
