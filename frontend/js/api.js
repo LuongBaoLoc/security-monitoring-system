@@ -554,7 +554,11 @@
           card.className = 'camera-card';
           card.innerHTML =
             (isOnline
-              ? '<div class="camera-scene"><span class="scene-building"></span><span class="scene-ground"></span><span class="person-shape"></span><span class="camera-live">● LIVE</span></div>'
+              ? '<div class="camera-scene" style="position:relative;overflow:hidden;background:#111">' +
+              '<canvas data-camera-live="' + cam.id + '" width="640" height="360" style="width:100%;height:100%;object-fit:cover;display:block"></canvas>' +
+
+                '<span class="camera-live">● LIVE</span></div>'
+
               : '<div class="camera-scene scene-offline"><span class="camera-live offline-tag"><span class="dot offline"></span>OFFLINE</span><span class="offline-copy">Tạm thời chưa hoạt động</span></div>') +
             '<div class="camera-info"><div><strong></strong><small></small></div><span class="status ' + (isOnline ? 'online' : 'unknown') + '"><span class="dot ' + (isOnline ? '' : 'offline') + '"></span>' + (isOnline ? 'Đang hoạt động' : 'Tạm thời chưa hoạt động') + '</span></div>' +
             '<button class="btn camera-detail">Xem chi tiết</button>';
@@ -1726,7 +1730,13 @@
       renderOverviewDevices();
       renderOverviewActivity();
       renderQuickCameras();
-      renderCamerasViews();
+
+      if (!document.querySelector(
+      '[data-page="monitor"] canvas[data-camera-live]'
+      )) {
+       renderCamerasViews();
+      }
+
       renderAiView();
       renderIotView();
       renderAlertsView();
@@ -1756,6 +1766,50 @@
 
   window.smartSecureRefreshOverview = refreshDataOnly;
 
+  function refreshCameraSnapshots() {
+    if (!token || document.hidden) return;
+
+    document.querySelectorAll(
+      '[data-page="monitor"] img[data-camera-snapshot]'
+    ).forEach(function (img) {
+      if (img.dataset.loading === '1') return;
+
+      img.dataset.loading = '1';
+      var cameraId = img.dataset.cameraSnapshot;
+
+      fetch('/api/camera/' + cameraId + '/snapshot', {
+        headers: {
+          Authorization: 'Bearer ' + token
+        },
+        cache: 'no-store'
+      })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error('Camera HTTP ' + response.status);
+        }
+        return response.blob();
+      })
+      .then(function (blob) {
+        if (!img.isConnected) return;
+
+        var url = URL.createObjectURL(blob);
+        img.onload = function () {
+          URL.revokeObjectURL(url);
+        };
+        img.onerror = function () {
+          URL.revokeObjectURL(url);
+        };
+        img.src = url;
+      })
+      .catch(function (error) {
+        console.warn('Không lấy được ảnh camera:', error);
+      })
+      .finally(function () {
+        img.dataset.loading = '0';
+      });
+    });
+  }
+
   function initTheme() {
     var rootEl = document.getElementById('smartsecure-prototype');
     var themeBtn = document.getElementById('ss-theme-toggle');
@@ -1784,6 +1838,7 @@
     initTheme();
     bindInteractiveControls();
     refresh();
+        setInterval(refreshCameraSnapshots, 10000);
     setInterval(function () {
       if (token && !document.hidden) {
         refreshDataOnly();
