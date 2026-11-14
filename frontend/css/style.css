@@ -2368,3 +2368,31 @@ html, body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Phóng to khung camera LIVE */
+[data-page="monitor"] .camera-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+[data-page="monitor"] .camera-scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  background: #111;
+}
+
+[data-page="monitor"] canvas[data-camera-live] {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+@media (max-width: 768px) {
+  [data-page="monitor"] .camera-gallery {
+    grid-template-columns: 1fr;
+  }
+}

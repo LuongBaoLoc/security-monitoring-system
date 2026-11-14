@@ -9,7 +9,7 @@ from app.database.connection import SessionLocal, engine
 from app.models import User
 from app.routers import api, dashboard_socket
 from app.services import seed_demo_data_if_empty
-
+from app.camera_stream import camera_router
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -35,7 +35,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(api)
-
+app.include_router(camera_router)
 
 @app.get("/")
 def root():
