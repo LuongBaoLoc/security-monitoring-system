@@ -1,6 +1,6 @@
-# ESP32 & Cảm biến IoT (Thành viên 3)
+# ESP32 & Cảm biến IoT (Rust Firmware — `esp-idf-svc` & `esp-idf-hal`)
 
-Thư mục này chứa mã nguồn firmware mẫu `esp32/main.ino` và sơ đồ đấu nối phần cứng cho nút cảm biến/điều khiển an ninh dùng vi điều khiển **ESP32 DevKit V1**.
+Thư mục này chứa mã nguồn firmware **Rust** [`esp32/src/main.rs`](esp32/src/main.rs) và sơ đồ đấu nối phần cứng cho nút cảm biến/điều khiển an ninh dùng vi điều khiển **ESP32 DevKit V1**.
 
 ## 1. Danh sách phần cứng (Tuần 2 – Tuần 3)
 
@@ -15,15 +15,15 @@ Thư mục này chứa mã nguồn firmware mẫu `esp32/main.ino` và sơ đồ
 
 ## 2. Sơ đồ đấu nối chân (Pinout / Wiring Diagram – Tuần 3)
 
-Bảng ánh xạ chân GPIO trên ESP32 khớp trực tiếp với firmware [`esp32/main.ino`](esp32/main.ino):
+Bảng ánh xạ chân GPIO trên ESP32 khớp trực tiếp với firmware Rust [`esp32/src/main.rs`](esp32/src/main.rs):
 
 | Thiết bị ngoại vi | Chân linh kiện | Chân ESP32 | Chế độ GPIO | Lưu ý kỹ thuật |
 |---|---|---|---|---|
-| **PIR HC-SR501** | VCC / OUT / GND | VIN (5V) / **GPIO 27** / GND | `INPUT` | Chân OUT của HC-SR501 xuất mức logic 3.3V an toàn cho ESP32 |
-| **Cảm biến MQ-2** | VCC / A0 / GND | VIN (5V) / **GPIO 34 (ADC1_CH6)** / GND | `INPUT` (Analog) | Dùng ADC1 (GPIO 34) vì ADC2 xung đột khi bật Wi-Fi; dùng cầu phân áp nếu A0 > 3.3V |
-| **Relay Đèn khu vực** | VCC / IN1 / GND | VIN (5V) / **GPIO 26** / GND | `OUTPUT` | Điều khiển qua lệnh MQTT `relay_on` / `relay_off` |
-| **Còi báo động (Buzzer)** | (+) / (-) | **GPIO 25** / GND | `OUTPUT` | Điều khiển qua lệnh MQTT `buzzer_on` / `buzzer_off` |
-| **Relay Khóa điện cửa** | VCC / IN2 / GND | VIN (5V) / **GPIO 33** / GND | `OUTPUT` | Điều khiển qua lệnh MQTT `lock` / `unlock` |
+| **PIR HC-SR501** | VCC / OUT / GND | VIN (5V) / **GPIO 27** / GND | `INPUT` (`PinDriver::input`) | Chân OUT của HC-SR501 xuất mức logic 3.3V an toàn cho ESP32 |
+| **Cảm biến MQ-2** | VCC / A0 / GND | VIN (5V) / **GPIO 34 (ADC1_CH6)** / GND | `INPUT` (`AdcChannelDriver`) | Dùng ADC1 (GPIO 34) vì ADC2 xung đột khi bật Wi-Fi |
+| **Relay Đèn khu vực** | VCC / IN1 / GND | VIN (5V) / **GPIO 26** / GND | `OUTPUT` (`PinDriver::output`) | Điều khiển qua lệnh MQTT `relay_on` / `relay_off` |
+| **Còi báo động (Buzzer)** | (+) / (-) | **GPIO 25** / GND | `OUTPUT` (`PinDriver::output`) | Điều khiển qua lệnh MQTT `buzzer_on` / `buzzer_off` |
+| **Relay Khóa điện cửa** | VCC / IN2 / GND | VIN (5V) / **GPIO 33** / GND | `OUTPUT` (`PinDriver::output`) | Điều khiển qua lệnh MQTT `lock` / `unlock` |
 
 ```text
                        +-----------------------+
@@ -41,9 +41,17 @@ Bảng ánh xạ chân GPIO trên ESP32 khớp trực tiếp với firmware [`es
 - `security/device/{device_id}/command`: ESP32 lắng nghe lệnh điều khiển từ Backend (`relay_on`, `relay_off`, `buzzer_on`, `buzzer_off`, `lock`, `unlock`).
 - `security/device/{device_id}/ack`: ESP32 gửi xác nhận (`accepted` / `rejected`) kèm `command_id`.
 
-## 4. Hướng dẫn nạp firmware
+## 4. Hướng dẫn biên dịch & nạp firmware Rust cho ESP32
 
-1. Cài đặt **Arduino IDE** và gói board **esp32 by Espressif Systems**.
-2. Trong Library Manager, cài đặt 2 thư viện: **`PubSubClient`** và **`ArduinoJson`**.
-3. Mở file `esp32/main.ino`, cập nhật `WIFI_SSID`, `WIFI_PASSWORD`, `MQTT_HOST` và `DEVICE_ID` khớp với `device_code` đã đăng ký trong bảng `devices`.
-4. Chọn đúng cổng COM và nhấn **Upload**.
+1. Cài đặt toolchain Rust cho ESP32 bằng `espup` và `espflash`:
+   ```powershell
+   cargo install espup espflash ldproxy
+   espup install
+   ```
+2. Mở file `esp32/src/main.rs`, cập nhật `WIFI_SSID`, `WIFI_PASSWORD`, `MQTT_HOST` và `DEVICE_ID` khớp với `device_code` đã đăng ký trong bảng `devices`.
+3. Biên dịch và nạp firmware trực tiếp qua cổng USB/COM:
+   ```powershell
+   cd iot-service/esp32
+   cargo build --release
+   espflash flash --monitor target/xtensa-esp32-espidf/release/smartsecure-esp32-firmware
+   ```

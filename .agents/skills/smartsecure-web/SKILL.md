@@ -1,69 +1,75 @@
 ---
 name: smartsecure-web
 description: >-
-  Hoàn thiện, vận hành và kiểm thử toàn bộ chức năng trên Web Dashboard SmartSecure
-  (Security Monitoring System), bao gồm tự động kiểm tra và cập nhật trạng thái thực tế
-  của từng dịch vụ/thiết bị (có thì tự hiện hoạt động kèm hiệu ứng animation chấm sáng lan tỏa,
-  thiếu/tắt thì hiện tạm thời chưa hoạt động), phân quyền người dùng (ADMIN / OPERATOR),
-  và chức năng Admin thêm/quản lý tài khoản.
+  Hoàn thiện, tái cấu trúc thư mục Backend Rust (Axum + SQLx) với tên thư mục và file
+  bằng tiếng Việt rõ ràng (phần nào ra phần đó, dễ tìm, dễ nhìn), vận hành và kiểm thử
+  toàn bộ chức năng trên Web Dashboard SmartSecure, bao gồm tự động kiểm tra trạng thái
+  thực tế kèm animation, phân quyền người dùng (ADMIN / OPERATOR), và Admin thêm/quản lý tài khoản.
 ---
 
-# SmartSecure Full Web Functions, Auto Health Status, Animations & RBAC Skill
+# SmartSecure Rust Backend (Thư mục Tiếng Việt), Full Web Functions & RBAC Skill
 
-Sử dụng skill này khi người dùng gọi `/smartsecure-web` hoặc yêu cầu **tự động cập nhật trạng thái hệ thống theo thực tế**, **tạo hiệu ứng animation cho các chấm/nút trạng thái (`.dot`) và nút tương tác**, cùng **Phân quyền người dùng (`ADMIN` / `OPERATOR`), Admin thêm tài khoản**, và **hoàn thiện toàn bộ chức năng Web Dashboard**.
-
----
-
-## 0. Cơ chế Tự động Kiểm tra Trạng thái & Hiệu ứng Animation Chấm Trạng thái (`.dot`)
-
-### 0.1. Hiệu ứng Animation cho Chấm Trạng thái (`.dot`) và Nút bấm
-1. **Chấm trạng thái đang hoạt động (`.dot` xanh lá — `online` / `active`)**:
-   - Phải có hiệu ứng **nhấp nháy sóng lan tỏa (Pulse / Ripple Halo Animation)** mượt mà liên tục bằng CSS `@keyframes` (`::before` / `::after` hoặc `box-shadow` lan tỏa từ `0px` ra `6px-8px` với độ mờ giảm dần `opacity: 0.7 -> 0` trong `1.8s - 2s infinite ease-out`).
-   - Áp dụng cho tất cả các chấm `.dot` đang ở trạng thái **Hoạt động / Trực tuyến** trên toàn giao diện:
-     - Các thẻ dịch vụ đang hoạt động ở trang **Trạng thái hệ thống (`system`)** (`#ss-sys-api`, `#ss-sys-db`, v.v. khi online).
-     - Nhãn `.system-pill .dot` trên thanh Header và đầu các trang khi hệ thống/thiết bị trực tuyến.
-     - Thẻ `.vpn-card .dot` khi WireGuard VPN thực sự đang bật.
-     - Các badge `.status.online` của Camera và Thiết bị IoT đang trực tuyến.
-2. **Chấm trạng thái cảnh báo / nghiêm trọng (`warning` / `critical` / `.camera-live`)**:
-   - Có hiệu ứng pulse màu cam (`#f59e0b`) hoặc đỏ (`#ef4444`) nhanh hơn (`1.2s infinite`) để thu hút sự chú ý.
-3. **Chấm trạng thái "Tạm thời chưa hoạt động" / Ngoại tuyến (`offline` / `inactive`)**:
-   - Đổi sang **màu xám tĩnh (`#94a3b8`)**, **tắt hoàn toàn animation (`animation: none; box-shadow: none`)** để nhìn vào phân biệt được ngay mục nào đang chạy thật (có sóng xanh chuyển động) và mục nào đang tạm nghỉ/chưa hoạt động (chấm xám đứng yên).
-4. **Animation cho các nút bấm & công tắc (`.btn`, `.toggle`, `.nav button`)**:
-   - Khi hover/click có hiệu ứng chuyển động mượt (`transform: translateY(-1px)`, `active: scale(0.97)`), nút `"Làm mới"` / `"Kiểm tra lại"` có icon `<i data-lucide="refresh-cw">` xoay tròn (`spin` 360 độ) khi đang tải dữ liệu.
-
-### 0.2. Nguyên tắc Tự động Kiểm tra & Ẩn/Hiện theo Thực tế (Dynamic Auto-Status)
-- **Không hardcode cứng trạng thái**: Backend (`GET /api/system/health` + `/api/statistics/overview`) tự động dò thực tế từng thành phần và đồng bộ lên Frontend (qua WebSocket + Polling định kỳ 5–10 giây + nút `"Kiểm tra lại"`):
-  1. **Backend API & PostgreSQL**: Kiểm tra `SELECT 1`. Đang chạy -> Bật chấm xanh có animation pulse `Hoạt động tốt`. Lỗi -> Chấm đỏ/xám.
-  2. **MQTT & Mạch ESP32**: Kiểm tra kết nối socket tới MQTT Broker và số thiết bị `ONLINE`. Có kết nối -> Bật chấm xanh có animation pulse và hiện thông số cảm biến (`PIR`, `MQ-2`, `Relay/Lock`). Chưa có -> Chấm xám tĩnh `Tạm thời chưa hoạt động`.
-  3. **Luồng Camera RTSP**: Có camera `ONLINE` -> Bật chấm xanh có animation pulse. Chưa có -> Chấm xám tĩnh `Tạm thời chưa hoạt động`.
-  4. **AI Worker (YOLOv8)**: Ping `http://ai-service:8001/health` (hoặc `localhost:8001/health`). Phản hồi 200 -> Bật chấm xanh có animation pulse. Chưa bật -> Chấm xám tĩnh `Tạm thời chưa hoạt động`.
-  5. **WireGuard VPN**: Kiểm tra interface `wg0` thực tế. Đang chạy -> Bật chấm xanh có animation pulse. Chưa cấu hình -> Chấm xám tĩnh `Tạm thời chưa hoạt động`.
+Sử dụng skill này khi người dùng gọi `/smartsecure-web` hoặc yêu cầu **sắp xếp cấu trúc thư mục Backend Rust (`backend/src`) bằng tên tiếng Việt rõ ràng, phần nào ra phần đó**, **tự động cập nhật trạng thái hệ thống kèm animation**, **Phân quyền (`ADMIN` / `OPERATOR`) & Admin thêm tài khoản**, hoặc **hoàn thiện toàn bộ chức năng Web Dashboard**.
 
 ---
 
-## 1. Ma trận Phân quyền Người dùng (RBAC: `ADMIN` vs `OPERATOR`)
+## 0. Cấu trúc Thư mục Backend Rust bằng Tiếng Việt — Phần nào ra phần đó (`backend/src/`)
 
-| Trang / Chức năng (`data-view`) | Quyền `ADMIN` (Quản trị viên) | Quyền `OPERATOR` (Nhân viên vận hành) | Quy tắc Tự động Ẩn/Hiện theo Quyền |
-| :--- | :--- | :--- | :--- |
-| **1. Tổng quan (`overview`)** | Xem toàn bộ thống kê & biểu đồ | Xem toàn bộ thống kê & biểu đồ | Hiển thị cho cả 2 vai trò |
-| **2. Giám sát Camera (`monitor`)** | Xem danh sách, tìm kiếm, lọc | Xem danh sách, tìm kiếm, lọc | Hiển thị cho cả 2 vai trò |
-| **3. Giám sát AI (`ai`)** | Xem, lọc theo đối tượng, mức độ, từ khóa | Xem, lọc theo đối tượng, mức độ, từ khóa | Hiển thị cho cả 2 vai trò |
-| **4. Thiết bị IoT (`iot`)** | Xem cảm biến, Điều khiển, **Thêm/Xóa thiết bị** | Xem cảm biến & Điều khiển (`Relay`, `Còi`, `Khóa`) | Tự động **ẩn** nút `Thêm thiết bị` và `Xóa` nếu là `OPERATOR` |
-| **5. Cảnh báo an ninh (`alerts`)** | Xem, lọc, **Xử lý cảnh báo (`Resolve`)** | Xem, lọc, **Xử lý cảnh báo (`Resolve`)** | Cả 2 vai trò đều thấy nút `Xử lý` trên cảnh báo `OPEN` |
-| **6. Lịch sử sự kiện (`history`)** | Xem timeline, phân bố & lọc bảng sự kiện | Xem timeline, phân bố & lọc bảng sự kiện | Hiển thị cho cả 2 vai trò |
-| **7. Quản lý Camera (`cameras`)** | **Thêm / Sửa / Xóa Camera** | Chỉ xem danh sách | Tự động **ẩn** nút `Thêm Camera`, `Sửa`, `Xóa` nếu không phải `ADMIN` |
-| **8. Quản lý người dùng (`users`)** | **Xem danh sách, Thêm tài khoản, Đổi vai trò, Khóa/Mở khóa** | **Tự động ẩn mục menu & trang Quản lý người dùng** | Chỉ hiển thị menu `users` và nút `Thêm tài khoản` khi `role === 'ADMIN'` |
-| **9. Trạng thái hệ thống (`system`)** | Xem & kiểm tra lại toàn bộ dịch vụ | Xem trạng thái dịch vụ | Hiển thị cho cả 2 vai trò |
-| **10. Cài đặt hệ thống (`settings`)** | Xem & cập nhật ngưỡng cảnh báo | Chỉ xem thông số cấu hình | Tự động ẩn nút lưu cấu hình nếu không phải `ADMIN` |
+Khi tổ chức mã nguồn Rust (`Axum` + `SQLx` + `rumqttc`), sử dụng **tên thư mục và tên file bằng tiếng Việt không dấu (`snake_case` đúng chuẩn trình biên dịch Rust)** để nhìn vào biết ngay file nào phụ trách chức năng gì, tuyệt đối không để file nằm lộn xộn:
+
+```text
+backend/
+├── Cargo.toml
+└── src/
+    ├── main.rs                         # Điểm khởi chạy chính của server Backend
+    ├── cau_hinh/                       # 1. Cấu hình hệ thống & đọc biến môi trường (.env)
+    │   └── mod.rs                      # Struct Settings (port, database_url, mqtt, secret_key...)
+    ├── bao_mat/                        # 2. Bảo mật, Mã hóa mật khẩu, JWT & Kiểm tra phân quyền
+    │   └── mod.rs                      # hash_password, verify_password, create_token, current_user, admin_user
+    ├── co_so_du_lieu/                  # 3. Cơ sở dữ liệu (PostgreSQL / SQLite)
+    │   ├── mod.rs
+    │   ├── ket_noi.rs                  # Quản lý Pool kết nối DB & AppState dùng chung
+    │   └── khoi_tao_bang.rs            # Tự động tạo các bảng SQL (init_schema)
+    ├── mo_hinh_du_lieu/                # 4. Mô hình bảng dữ liệu trong Database (SQLx Models)
+    │   └── mod.rs                      # User, Camera, Device, Sensor, DetectionEvent, Alert, Logs, RuntimeSettings
+    ├── khuon_mau_du_lieu/              # 5. Khuôn mẫu dữ liệu JSON gửi lên / trả về (Request/Response Schemas)
+    │   └── mod.rs                      # Login, UserCreate, CameraCreate, CommandCreate, DetectionCreate...
+    ├── dinh_tuyen_api/                 # 6. Định tuyến API — Tách riêng từng trang/chức năng trên Web
+    │   ├── mod.rs                      # Gộp tất cả các nhánh API vào `/api` (`api_router()`)
+    │   ├── xac_thuc.rs                 # Đăng nhập, Đăng ký, Lấy thông tin phiên (`/api/auth/*`)
+    │   ├── quan_ly_nguoi_dung.rs       # Danh sách user, Admin thêm/sửa/khóa tài khoản (`/api/users/*`)
+    │   ├── quan_ly_camera.rs           # Xem, Thêm, Sửa, Xóa Camera (`/api/cameras/*`)
+    │   ├── thiet_bi_va_cam_bien.rs     # Thiết bị IoT ESP32, gửi lệnh điều khiển & cảm biến (`/api/devices/*`, `/api/sensors/*`)
+    │   ├── su_kien_ai.rs               # Tiếp nhận & tra cứu sự kiện nhận diện AI YOLOv8 (`/api/detections/*`)
+    │   ├── canh_bao_an_ninh.rs         # Danh sách cảnh báo & xử lý cảnh báo (`/api/alerts/*`)
+    │   ├── thong_ke_va_nhat_ky.rs      # Số liệu trang Tổng quan, biểu đồ & lịch sử nhật ký (`/api/statistics/*`, `/api/logs/*`)
+    │   └── he_thong_va_cai_dat.rs      # Tự động kiểm tra trạng thái hệ thống & cài đặt (`/api/system/health`, `/api/settings`)
+    ├── dich_vu_nghiep_vu/              # 7. Dịch vụ xử lý nghiệp vụ nền
+    │   └── mod.rs                      # Tạo Admin mặc định (bootstrap), tạo dữ liệu mẫu (seed), ghi log hệ thống
+    ├── giao_tiep_mqtt/                 # 8. Giao tiếp MQTT với mạch ESP32
+    │   └── mod.rs                      # Lắng nghe telemetry/status/ack & phát lệnh điều khiển qua MQTT Broker
+    └── ket_noi_websocket/              # 9. Kết nối WebSocket thời gian thực
+        └── mod.rs                      # Kênh `/ws/dashboard` đẩy thông báo trực tiếp lên giao diện Web
+```
+
+### Quy tắc bắt buộc khi sắp xếp thư mục Tiếng Việt:
+1. Dùng tiếng Việt không dấu chuẩn `snake_case` để trình biên dịch `cargo` hoạt động ổn định 100% trên mọi hệ điều hành và Docker mà không gặp lỗi bảng mã Unicode.
+2. Trong thư mục `dinh_tuyen_api/`, **mỗi chức năng trên Web phải nằm ở 1 file riêng biệt** (`xac_thuc.rs`, `quan_ly_nguoi_dung.rs`, `quan_ly_camera.rs`, `thiet_bi_va_cam_bien.rs`, `su_kien_ai.rs`, `canh_bao_an_ninh.rs`, `thong_ke_va_nhat_ky.rs`, `he_thong_va_cai_dat.rs`).
+3. Xóa toàn bộ các file `.rs` tiếng Anh nằm phẳng cũ ở ngoài `backend/src/` (`config.rs`, `db.rs`, `models.rs`, `mqtt.rs`, `routers.rs`, `schemas.rs`, `security.rs`, `services.rs`, `websocket.rs`) sau khi đã chuyển code vào các thư mục tiếng Việt tương ứng; ở ngoài `backend/src/` chỉ giữ duy nhất file `main.rs` và 9 thư mục tiếng Việt trên.
+4. Chạy `cargo check` để đảm bảo toàn bộ `mod` và `use crate::...` biên dịch thành công 100%.
 
 ---
 
-## 2. Chức năng Admin Thêm & Quản lý Tài khoản (`data-page="users"`)
+## 1. Cơ chế Tự động Kiểm tra Trạng thái & Hiệu ứng Animation Chấm Trạng thái (`.dot`)
 
-- **Backend**:
-  - `GET /api/users`: Danh sách người dùng.
-  - `POST /api/users` (`Depends(admin_user)`): Tạo người dùng mới với `username`, `password`, `full_name`, `role` (`ADMIN` / `OPERATOR`), `is_active`.
-  - `PUT /api/users/{user_id}` (`Depends(admin_user)`): Đổi vai trò (`ADMIN` <-> `OPERATOR`) hoặc Khóa/Mở khóa (`is_active`).
-- **Frontend**:
-  - Nút `Thêm tài khoản` (`data-modal="user"`) mở modal nhập Họ tên, Tên đăng nhập, Mật khẩu, Vai trò -> Gọi `POST /api/users` -> Cập nhật bảng `#ss-users-tbody`.
-  - Có nút **Đăng xuất** trên góc phải / sidebar để đổi tài khoản kiểm tra phân quyền.
+- **Đang hoạt động (`.dot` xanh lá — `online` / `active`)**: Có hiệu ứng **nhấp nháy sóng lan tỏa (Pulse / Ripple Halo Animation)** mượt mà liên tục bằng CSS `@keyframes`.
+- **Cảnh báo / Nghiêm trọng (`warning` / `critical`)**: Hiệu ứng pulse màu cam/đỏ nhanh hơn (`1.2s infinite`).
+- **Tạm thời chưa hoạt động / Ngoại tuyến (`offline` / `inactive`)**: Đổi sang **màu xám tĩnh (`#94a3b8`)**, tắt hoàn toàn animation (`animation: none; box-shadow: none`).
+- **Tự động kiểm tra thực tế (`dinh_tuyen_api/he_thong_va_cai_dat.rs`)**: Thành phần nào đã có / đang chạy thì tự bật chấm xanh có animation và hiển thị thông số; thành phần nào thiếu / đang tắt thì tự hiện chấm xám tĩnh `"Tạm thời chưa hoạt động"`.
+
+---
+
+## 2. Phân quyền Người dùng (`ADMIN` vs `OPERATOR`) & Admin Thêm Tài khoản (`dinh_tuyen_api/quan_ly_nguoi_dung.rs`)
+
+- **`ADMIN`**: Toàn quyền trên 10 trang; tại trang **Quản lý người dùng (`users`)** có nút **Thêm tài khoản** (`POST /api/users`), đổi vai trò (`ADMIN` <-> `OPERATOR`) và Khóa/Mở khóa tài khoản (`PUT /api/users/:id`).
+- **`OPERATOR`**: Được xem các trang giám sát, lọc dữ liệu, xử lý cảnh báo (`PUT /api/alerts/:id/resolve`) và điều khiển thiết bị IoT, nhưng tự động ẩn các nút/mục quản trị và chặn `403 Forbidden` ở Backend.
