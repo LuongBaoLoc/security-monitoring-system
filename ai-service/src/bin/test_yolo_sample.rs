@@ -1,12 +1,12 @@
+use serde_json::json;
 use std::env;
 use std::fs;
 use std::time::Instant;
-use serde_json::json;
 
 use ai_service::{
     camera::{capture_frame_bytes, create_sample_test_image},
     config::AiConfig,
-    detector::{detect, DetectionItem},
+    detector::Detector,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -37,9 +37,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let (frame_bytes, source_desc) = if let Some(ref rtsp) = rtsp_arg {
-        println!("[1/3] Đang đọc frame từ nguồn stream: {rtsp} ...");
+        println!("[1/3] Đang đọc frame từ camera RTSP ...");
         let bytes = capture_frame_bytes(rtsp, 85)?;
-        (bytes, format!("stream:{rtsp}"))
+        (bytes, "RTSP".to_string())
     } else if let Some(ref img_path) = image_arg {
         println!("[1/3] Đang đọc ảnh mẫu từ file: {img_path} ...");
         let bytes = fs::read(img_path)?;
@@ -58,34 +58,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let config = AiConfig::from_env();
-    let model_display = if config.model_path.is_empty() {
-        "chưa đặt"
-    } else {
-        &config.model_path
-    };
+    let mut detector = Detector::load(&config)?;
     println!(
-        "[2/3] Kiểm tra cấu hình model YOLO (MODEL_PATH={}, CONF={}) ...",
-        model_display, config.confidence_threshold
+        "[2/3] YOLOv8 ONNX {:?}, ngưỡng {}",
+        detector.models(),
+        config.confidence_threshold
     );
 
     let start_t = Instant::now();
-    let (detections, mode) = if !config.is_model_configured() {
-        println!("      -> Chưa có file trọng số tại MODEL_PATH. Chạy chế độ mô phỏng đầu ra chuẩn contract Tuần 4:");
-        let sim = vec![DetectionItem {
-            object_type: "person".to_string(),
-            confidence: 0.942,
-            event_type: "person".to_string(),
-        }];
-        (sim, "simulated_contract")
-    } else {
-        let dets = detect(&frame_bytes, &config)?;
-        (dets, "rust_yolov8")
-    };
+    let detections = detector
+        .detect(&frame_bytes)
+        .map_err(|error| format!("{error:?}"))?;
     let elapsed_ms = start_t.elapsed().as_secs_f64() * 1000.0;
 
     let report = json!({
         "status": "ok",
-        "mode": mode,
+        "mode": "yolov8_onnx",
         "source": source_desc,
         "frame_size_bytes": frame_bytes.len(),
         "inference_time_ms": (elapsed_ms * 100.0).round() / 100.0,

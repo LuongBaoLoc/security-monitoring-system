@@ -2,7 +2,7 @@ PHAN CONG CONG VIEC DO AN 14 TUAN - 3 THANH VIEN
 De tai: Xay dung he thong giam sat va bao dong an ninh thong minh (Security Monitoring System)
 
 PHAN VAI THANH VIEN
-- Thanh vien 1 - Backend/Database: FastAPI, REST API, xac thuc, PostgreSQL, MQTT backend, Docker va tich hop he thong.
+- Thanhhuy (Thanh vien 1) - Backend/Database: FastAPI, REST API, xac thuc, PostgreSQL, MQTT backend, Docker va tich hop he thong.
 - Thanh vien 2 - Frontend: giao dien dashboard, cac man hinh quan ly, ket noi REST API/WebSocket va hien thi du lieu.
 - Thanh vien 3 - AI/IoT: YOLOv8, xu ly camera/frame, ESP32, cam bien, firmware va giao tiep MQTT.
 - Ca 3 cung tham gia phan tich, thong nhat API/topic/payload, tich hop, danh gia ket qua va viet bao cao. Phan cong nay la ke hoach du kien; dieu chinh theo tien do thuc te cua nhom.

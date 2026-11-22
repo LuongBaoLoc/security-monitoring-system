@@ -7,7 +7,7 @@ Hệ thống được thiết kế theo kiến trúc phân tán gồm 3 khối c
 ```mermaid
 flowchart LR
     subgraph Edge_AI["Khối AI (Thành viên 3)"]
-        CAM["Camera IP / Ảnh mẫu"] --> YOLO["AI Service (FastAPI + YOLOv8)"]
+        CAM["Camera IP / Ảnh mẫu"] --> YOLO["AI Service (Rust / Axum)"]
     end
 
     subgraph Edge_IoT["Khối IoT (Thành viên 3)"]
@@ -42,7 +42,7 @@ flowchart LR
 
 | Thành phần MVC | Thư mục / Tệp nguồn | Trách nhiệm chính |
 |---|---|---|
-| **Model (Dữ liệu & Ràng buộc)** | `backend/app/models/__init__.py`<br>`backend/app/schemas/__init__.py`<br>`backend/app/database/base.py`<br>`database/init.sql`, `database/seed.sql` | Định nghĩa 8 bảng ORM (`User`, `Camera`, `Device`, `Sensor`, `DetectionEvent`, `Alert`, `DeviceLog`, `SystemLog`), quản lý kết nối SQLAlchemy và kiểm tra dữ liệu đầu vào bằng Pydantic. |
+| **Model (Dữ liệu & Ràng buộc)** | `backend/app/models/__init__.py`<br>`backend/app/schemas/__init__.py`<br>`backend/app/database/base.py`<br>`database/init.sql`, `database/seed.sql` | Định nghĩa 8 bảng nghiệp vụ và bảng cài đặt, quản lý kết nối và nâng cấp schema bằng SQLAlchemy, kiểm tra dữ liệu đầu vào bằng Pydantic. |
 | **View (Giao diện hiển thị)** | `frontend/index.html`<br>`frontend/css/style.css` | Bố cục 10 màn hình của trung tâm giám sát SmartSecure, hệ thống thẻ thống kê, biểu đồ cột/tròn, bảng dữ liệu, modal và thiết kế đáp ứng (responsive). |
 | **Controller & Service (Điều phối & Nghiệp vụ)** | `backend/app/routers/__init__.py`<br>`backend/app/services/__init__.py`<br>`backend/app/websocket/__init__.py`<br>`backend/app/mqtt/__init__.py`<br>`frontend/js/app.js`, `frontend/js/api.js` | Xử lý request HTTP, xác thực/phân quyền JWT, ẩn mật khẩu RTSP, đánh giá quy tắc tạo cảnh báo & chống trùng, đồng bộ MQTT command/ACK, phát sự kiện WebSocket và cập nhật DOM phía trình duyệt. |
 

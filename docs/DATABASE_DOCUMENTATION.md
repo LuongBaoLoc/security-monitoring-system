@@ -116,6 +116,6 @@ erDiagram
 
 ## 3. Khởi tạo Schema và Dữ liệu Mẫu (Tuần 4)
 
-- **File SQL khởi tạo**: [`database/init.sql`](../database/init.sql) tạo đầy đủ 8 bảng và các B-tree index tối ưu truy vấn theo thời gian.
+- **File SQL khởi tạo**: [`database/init.sql`](../database/init.sql) tạo 8 bảng nghiệp vụ và bảng `runtime_settings`. FastAPI tự tạo schema và nâng cấp dữ liệu backend Rust khi khởi động.
 - **File dữ liệu mẫu SQL**: [`database/seed.sql`](../database/seed.sql) cung cấp dữ liệu mẫu cho 4 camera, 3 thiết bị ESP32, lịch sử cảm biến, 5 sự kiện nhận diện AI, 4 cảnh báo, nhật ký điều khiển và nhật ký hệ thống.
 - **Tự động khởi tạo khi chạy Backend**: Khi `SEED_DEMO_DATA=true` (mặc định trong môi trường phát triển), hàm `seed_demo_data_if_empty()` trong [`backend/app/services/__init__.py`](../backend/app/services/__init__.py) tự động nạp bộ dữ liệu mẫu nếu CSDL đang trống, giúp nhóm review ngay giao diện Tổng quan với dữ liệu thật từ API.

@@ -1,12 +1,12 @@
+use image::{codecs::jpeg::JpegEncoder, DynamicImage, Rgb, RgbImage};
 use std::io::Cursor;
 use std::path::Path;
-use std::process::Command;
-use image::{codecs::jpeg::JpegEncoder, DynamicImage, Rgb, RgbImage};
+use std::{process::Command, time::Duration};
 
 pub fn capture_frame_bytes(source: &str, jpeg_quality: u8) -> Result<Vec<u8>, String> {
     if Path::new(source).is_file() {
-        let bytes = std::fs::read(source)
-            .map_err(|e| format!("Unable to read file {source}: {e}"))?;
+        let bytes =
+            std::fs::read(source).map_err(|e| format!("Unable to read file {source}: {e}"))?;
         let img = image::load_from_memory(&bytes)
             .map_err(|e| format!("Unable to decode image {source}: {e}"))?;
         return encode_jpeg(&img, jpeg_quality);
@@ -14,28 +14,56 @@ pub fn capture_frame_bytes(source: &str, jpeg_quality: u8) -> Result<Vec<u8>, St
 
     // Attempt to grab 1 frame from RTSP/video stream via ffmpeg CLI
     let output = Command::new("ffmpeg")
-        .args([
-            "-loglevel",
-            "error",
-            "-rtsp_transport",
-            "tcp",
-            "-i",
-            source,
-            "-frames:v",
-            "1",
-            "-f",
-            "image2pipe",
-            "-vcodec",
-            "mjpeg",
-            "pipe:1",
-        ])
+        .args(rtsp_args(source))
+        .arg("pipe:1")
         .output()
-        .map_err(|e| format!("Unable to open camera stream {source}: {e}"))?;
+        .map_err(|e| format!("Unable to start FFmpeg: {e}"))?;
 
     if !output.status.success() || output.stdout.is_empty() {
-        return Err(format!("Failed to read frame from camera stream: {source}"));
+        return Err("Failed to read frame from camera stream".into());
     }
 
+    Ok(output.stdout)
+}
+
+fn rtsp_args(source: &str) -> [&str; 20] {
+    [
+        "-nostdin",
+        "-loglevel",
+        "error",
+        "-rtsp_transport",
+        "tcp",
+        "-timeout",
+        "5000000",
+        "-i",
+        source,
+        "-an",
+        "-frames:v",
+        "1",
+        "-vf",
+        "scale=w='min(1280,iw)':h=-2",
+        "-f",
+        "image2pipe",
+        "-vcodec",
+        "mjpeg",
+        "-threads",
+        "1",
+    ]
+}
+
+pub async fn capture_rtsp_frame(source: &str) -> Result<Vec<u8>, String> {
+    let mut command = tokio::process::Command::new("ffmpeg");
+    command
+        .kill_on_drop(true)
+        .args(rtsp_args(source))
+        .arg("pipe:1");
+    let output = tokio::time::timeout(Duration::from_secs(12), command.output())
+        .await
+        .map_err(|_| "Timed out reading RTSP frame".to_string())?
+        .map_err(|error| format!("Unable to start FFmpeg: {error}"))?;
+    if !output.status.success() || output.stdout.is_empty() {
+        return Err("Failed to read frame from camera stream".into());
+    }
     Ok(output.stdout)
 }
 

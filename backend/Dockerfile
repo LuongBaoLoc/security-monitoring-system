@@ -1,13 +1,12 @@
-FROM rust:slim-bookworm AS builder
-WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev libsqlite3-dev && rm -rf /var/lib/apt/lists/*
-COPY Cargo.toml ./
-COPY src ./src
-RUN cargo build --release
+FROM python:3.11-slim-bookworm
 
-FROM debian:bookworm-slim
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libsqlite3-0 && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/security-monitoring-backend /app/security-monitoring-backend
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && useradd --system --no-create-home api
+COPY app ./app
+
+USER api
 EXPOSE 8000
-CMD ["/app/security-monitoring-backend"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,26 +1,41 @@
-# AI Detection Service (Rust - Axum)
+# AI Service YOLOv8
 
-Dịch vụ AI viết bằng **Rust (`axum`, `tokio`, `image`, `reqwest`)** nhận khung hình tại `POST /detect?camera_id=...`, xử lý nhận diện đối tượng (YOLO pipeline), sau đó gửi các sự kiện phát hiện về Backend qua `POST /api/detections`.
+AI Service Rust chạy ONNX Runtime trên CPU. Model PCCC gửi sự kiện `fire` và `smoke`. Model an ninh nhận diện người, ô tô, xe máy, xe buýt và xe tải. Hai model dùng chung API hiện có ở `POST /detect?camera_id=...`, rồi gửi kết quả tới `POST /api/detections` của backend.
 
-## Cấu trúc thư mục
+## Trọng số
 
-- `Cargo.toml`: Khai báo crate `security-monitoring-ai-service` và binary CLI `test_yolo_sample`.
-- `src/main.rs`: Axum HTTP server cung cấp endpoint `GET /health` và `POST /detect`.
-- `src/camera.rs`: Hàm chụp 1 khung hình JPEG từ file/luồng RTSP (`capture_frame_bytes`) và sinh ảnh mẫu thử nghiệm (`create_sample_test_image`).
-- `src/detector.rs`: Giải mã ảnh và trích xuất danh sách đối tượng (`object_type`, `confidence`, `event_type`).
-- `src/event_handler.rs`: Gửi JSON sự kiện phát hiện sang Backend kèm `AI_SERVICE_TOKEN`.
-- `src/bin/test_yolo_sample.rs`: Binary CLI kiểm thử đọc frame và chạy inference YOLO trên ảnh mẫu (đầu ra Tuần 3 – Tuần 4).
+Lưu hai tệp sau trong thư mục `models/` ở gốc dự án.
 
-## Cài đặt & chạy thử bằng Cargo
+| Tệp cục bộ | Model |
+|---|---|
+| `models/fire-smoke.onnx` | [Fire & Smoke R3-E6, tệp ONNX FP32 768](https://github.com/Supakorn289/fire-smoke-detection-r3e6/releases/tag/v1.0.0-r3e6) |
+| `models/yolov8n.onnx` | [Trọng số COCO từ Ultralytics Assets](https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.onnx) |
+
+`FIRE_MODEL_PATH` và `SECURITY_MODEL_PATH` cho phép chọn tệp khác theo thứ tự lớp của hai model trên. Dùng bản export YOLOv8 detect FP32 với đầu ra thô; nếu chạy một model, đặt đường dẫn của model còn lại thành chuỗi rỗng. `GET /health` hiển thị model đã tải qua trường `models`.
+
+## Chạy thử
+
+Docker Compose tự cung cấp ONNX Runtime, FFmpeg và kết nối backend. Từ thư mục gốc, chạy:
 
 ```powershell
-cd ai-service
-
-# Chạy dịch vụ AI HTTP Server trên cổng 8001
-cargo run --bin security-monitoring-ai-service
-
-# Chạy thử nghiệm pipeline YOLO với ảnh mẫu tự sinh (hoặc truyền --image / --rtsp)
-cargo run --bin test_yolo_sample
-cargo run --bin test_yolo_sample -- --image path/to/sample.jpg
-cargo run --bin test_yolo_sample -- --rtsp rtsp://192.168.1.21:554/stream1
+docker compose up --build -d
 ```
+
+Khi chạy trực tiếp, cài gói `onnxruntime==1.24.4` và đặt `ORT_DYLIB_PATH` tới thư viện bên trong `onnxruntime/capi`, chẳng hạn `onnxruntime.dll` trên Windows. [ONNX Runtime 1.24.4](https://pypi.org/project/onnxruntime/1.24.4/)
+
+```powershell
+cargo run -p security-monitoring-ai-service --bin security-monitoring-ai-service
+cargo run -p security-monitoring-ai-service --bin test_yolo_sample -- --image .\anh-mau.jpg
+```
+
+Đăng ký camera qua dashboard trước khi gửi ảnh. Thay `1` bằng ID thật và dùng cùng `AI_SERVICE_TOKEN` cho AI Service và backend.
+
+```powershell
+curl.exe -H ("Authorization: Bearer " + $env:AI_SERVICE_TOKEN) -F "file=@anh-mau.jpg;type=image/jpeg" "http://localhost:8001/detect?camera_id=1"
+```
+
+## Theo dõi camera RTSP
+
+Đặt `AI_CAMERA_ID` bằng ID camera đã đăng ký và `AI_RTSP_URL` bằng địa chỉ RTSP mà máy chạy AI truy cập được. Dùng biến môi trường cục bộ cho URL có thông tin xác thực. Khi cả hai biến được đặt, dịch vụ lấy mẫu một camera theo `AI_FRAME_INTERVAL_SECONDS` (mặc định 5 giây) bằng FFmpeg và gửi sự kiện có điểm cao nhất của mỗi lớp trong khung hình.
+
+`CONFIDENCE_THRESHOLD` lọc dự đoán trước khi gửi. Ngưỡng cảnh báo và khoảng chống trùng tiếp tục được cấu hình trong backend qua dashboard. Cảnh báo camera hỗ trợ phát hiện sớm bên cạnh hệ thống báo cháy chuyên dụng.

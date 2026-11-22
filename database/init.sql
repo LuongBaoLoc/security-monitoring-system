@@ -1,4 +1,4 @@
--- Bootstrap schema cho PostgreSQL mới. Schema chạy thật nên được tiến hóa bằng Alembic.
+-- Bootstrap schema tùy chọn cho PostgreSQL. FastAPI tự tạo và nâng cấp schema khi khởi động.
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(80) NOT NULL UNIQUE,
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS cameras (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(120) NOT NULL,
-    ip_address INET,
+    ip_address VARCHAR(64),
     rtsp_url TEXT NOT NULL,
     location VARCHAR(255),
     status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN' CHECK (status IN ('ONLINE', 'OFFLINE', 'UNKNOWN')),
@@ -78,7 +78,7 @@ CREATE INDEX IF NOT EXISTS ix_alerts_detection ON alerts(detection_id);
 CREATE TABLE IF NOT EXISTS device_logs (
     id BIGSERIAL PRIMARY KEY,
     device_id BIGINT NOT NULL REFERENCES devices(id) ON DELETE RESTRICT,
-    command_id UUID UNIQUE,
+    command_id VARCHAR(36) UNIQUE,
     command VARCHAR(80) NOT NULL,
     result VARCHAR(30) NOT NULL DEFAULT 'PENDING' CHECK (result IN ('PENDING', 'ACCEPTED', 'REJECTED', 'TIMEOUT', 'ERROR')),
     detail JSONB,
@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS device_logs (
     completed_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS ix_device_logs_device_time ON device_logs(device_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_device_logs_result_time ON device_logs(result, created_at);
 
 CREATE TABLE IF NOT EXISTS system_logs (
     id BIGSERIAL PRIMARY KEY,
@@ -96,3 +97,8 @@ CREATE TABLE IF NOT EXISTS system_logs (
 );
 CREATE INDEX IF NOT EXISTS ix_system_logs_time ON system_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_system_logs_user_time ON system_logs(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS runtime_settings (
+    id INTEGER PRIMARY KEY,
+    "values" JSONB NOT NULL
+);

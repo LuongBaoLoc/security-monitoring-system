@@ -25,7 +25,10 @@ services:
   backend:
     build: ./backend
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-security}:${POSTGRES_PASSWORD:-local-change-me}@db:5432/${POSTGRES_DB:-security_monitor}
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-security_monitor}
+      POSTGRES_USER: ${POSTGRES_USER:-security}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-change-me}
       SECRET_KEY: ${SECRET_KEY:-local-dev-only-change-before-deploying}
       CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
@@ -34,6 +37,8 @@ services:
       MQTT_ENABLED: "true"
       MQTT_HOST: mqtt
       MQTT_PORT: 1883
+      MQTT_COMMAND_TIMEOUT_SECONDS: ${MQTT_COMMAND_TIMEOUT_SECONDS:-15}
+      AI_HEALTH_URL: http://ai-service:8001/health
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
     depends_on:
@@ -43,6 +48,11 @@ services:
         condition: service_started
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
 
   frontend:
     image: nginx:1.27-alpine
@@ -50,7 +60,8 @@ services:
       - ./frontend:/usr/share/nginx/html:ro
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "8080:80"
 
@@ -59,12 +70,17 @@ services:
     environment:
       BACKEND_URL: http://backend:8000
       AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
-      MODEL_PATH: ${MODEL_PATH:-}
-      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.6}
+      FIRE_MODEL_PATH: ${FIRE_MODEL_PATH-/models/fire-smoke.onnx}
+      SECURITY_MODEL_PATH: ${SECURITY_MODEL_PATH-/models/yolov8n.onnx}
+      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.5}
+      AI_CAMERA_ID: ${AI_CAMERA_ID:-}
+      AI_RTSP_URL: ${AI_RTSP_URL:-}
+      AI_FRAME_INTERVAL_SECONDS: ${AI_FRAME_INTERVAL_SECONDS:-5}
     volumes:
       - ./models:/models:ro
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "8001:8001"
 

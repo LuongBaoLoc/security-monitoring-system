@@ -27,7 +27,7 @@ Tài liệu này hướng dẫn chi tiết cách cài đặt môi trường, kh�
 | :--- | :--- | :---: | :--- |
 | **Frontend (Web UI)** | HTML5, CSS3, JS, Nginx | `8080` | <http://localhost:8080> |
 | **Backend API** | Python FastAPI, SQLAlchemy | `8000` | <http://localhost:8000> (Swagger: `/docs`) |
-| **AI Service** | FastAPI, Ultralytics YOLOv8 | `8001` | <http://localhost:8001/health> |
+| **AI Service** | Rust / Axum, YOLOv8 ONNX | `8001` | <http://localhost:8001/health> |
 | **Database** | PostgreSQL 16 | `5432` | `localhost:5432` (DB: `security_monitor`) |
 | **MQTT Broker** | Eclipse Mosquitto 2 | `1883` | `mqtt://localhost:1883` |
 
@@ -48,8 +48,8 @@ Trước khi bắt đầu, các thành viên cài đặt các phần mềm sau:
 1. **Git**: [Tải Git](https://git-scm.com/) để clone và đồng bộ mã nguồn.
 2. **Docker Desktop** *(Bắt buộc nếu muốn chạy toàn bộ hệ thống bằng 1 lệnh)*: [Tải Docker Desktop](https://www.docker.com/products/docker-desktop/). Sau khi cài xong, mở Docker Desktop lên và đợi biểu tượng cá voi chuyển sang trạng thái **Engine running**.
 3. **Visual Studio Code (VS Code)**: Trình soạn thảo mã nguồn.
-4. **Python 3.12+** *(Tùy chọn cho TV1 và TV3 khi muốn chạy code trực tiếp trên máy không qua Docker)*.
-5. **Arduino IDE** *(Dành cho TV3 khi nạp code vào mạch ESP32 thật)*.
+4. **Python 3.11+** *(Dùng để chạy backend trực tiếp ngoài Docker)*.
+5. **Rust toolchain cho ESP32 và espflash** *(Dùng để biên dịch và nạp firmware)*.
 
 ---
 
@@ -83,8 +83,7 @@ BOOTSTRAP_ADMIN_USERNAME=admin
 BOOTSTRAP_ADMIN_PASSWORD=Admin@123456
 REGISTRATION_ENABLED=true
 SEED_DEMO_DATA=true
-MODEL_PATH=/models/yolov8n.pt
-CONFIDENCE_THRESHOLD=0.6
+CONFIDENCE_THRESHOLD=0.5
 ```
 
 > **Mẹo cho nhóm:**
@@ -108,9 +107,7 @@ docker compose ps
 ### Bước 4: Truy cập hệ thống
 
 - **Web Dashboard SmartSecure**: Mở trình duyệt vào **<http://localhost:8080>**
-  - **Tài khoản Admin mặc định**:
-    - Tên đăng nhập: `admin`
-    - Mật khẩu: `Admin@123456` *(hoặc mật khẩu đặt trong `BOOTSTRAP_ADMIN_PASSWORD` ở file `.env`)*
+  - Đăng nhập bằng `BOOTSTRAP_ADMIN_USERNAME` và `BOOTSTRAP_ADMIN_PASSWORD` trong `.env` nếu đây là lần đầu tạo tài khoản.
 - **Tài liệu Swagger API (Interactive API Docs)**: **<http://localhost:8000/docs>**
 - **Kiểm tra trạng thái thực tế của hệ thống (Health Check API)**: **<http://localhost:8000/api/system/health>**
 - **Kiểm tra AI Service**: **<http://localhost:8001/health>**
@@ -162,7 +159,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 #### B. Cấu trúc code Backend cần nắm
 
 - `backend/app/main.py`: Điểm khởi chạy ứng dụng, tạo bảng tự động, khởi tạo tài khoản Admin (`BOOTSTRAP_ADMIN_*`), nạp dữ liệu mẫu và bật MQTT client.
-- `backend/app/models/__init__.py`: Định nghĩa 8 bảng SQLAlchemy (`User`, `Camera`, `Device`, `Sensor`, `DetectionEvent`, `Alert`, `DeviceLog`, `SystemLog`).
+- `backend/app/models/__init__.py`: Định nghĩa các bảng nghiệp vụ và bảng cài đặt hệ thống bằng SQLAlchemy.
 - `backend/app/schemas/__init__.py`: Các schema Pydantic kiểm tra dữ liệu đầu vào.
 - `backend/app/routers/__init__.py`: Toàn bộ REST API endpoints (`/api/auth/*`, `/api/users/*`, `/api/cameras/*`, `/api/devices/*`, `/api/sensors/*`, `/api/detections/*`, `/api/alerts/*`, `/api/statistics/*`, `/api/system/*`, `/api/logs/*`).
 - `backend/app/mqtt/__init__.py`: Lắng nghe dữ liệu cảm biến và phản hồi ACK từ ESP32 qua MQTT.
@@ -194,33 +191,21 @@ python -m http.server 5500
 
 ### 4.3. Thành viên 3 — AI Service (YOLOv8) & IoT ESP32
 
-#### A. Cài đặt & Chạy thử AI Service (YOLOv8)
+#### A. Kiểm tra tích hợp AI Service
 
-1. **Chuẩn bị trọng số model YOLOv8**:
-   - Đặt file trọng số `yolov8n.pt` vào thư mục `models/` ở gốc dự án (`d:\DoAnChuyenNganh\security-monitoring-system\models\yolov8n.pt`).
-2. **Chạy thử script kiểm tra YOLO trên máy**:
+1. Tải các tệp ONNX cho PCCC và an ninh vào thư mục `models/`. Chạy AI Service rồi kiểm tra trường `models` ở `GET /health`. [Hướng dẫn AI Service](../ai-service/README.md)
+2. Đăng ký camera trên dashboard và lấy ID của camera. Có thể gửi một sự kiện thử qua API bằng token AI Service đã đặt trong `.env`.
    ```powershell
-   cd ai-service
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
-
-   # Chạy thử trên ảnh mẫu tự sinh hoặc truyền đường dẫn ảnh thật
-   python test_yolo_sample.py
-   python test_yolo_sample.py --image duong_dan_anh.jpg
+   $cameraId = 1  # Thay bằng ID của camera đã đăng ký
+   $headers = @{ Authorization = "Bearer $env:AI_SERVICE_TOKEN" }
+   $body = @{ camera_id = $cameraId; object_type = "person"; confidence = 0.95; event_type = "intrusion" } | ConvertTo-Json
+   Invoke-RestMethod -Uri "http://localhost:8000/api/detections" -Method POST -Headers $headers -ContentType "application/json" -Body $body
    ```
-3. **Giả lập gửi sự kiện phát hiện AI lên Backend (để test cảnh báo nhảy tức thì trên Web)**:
-   Mở PowerShell và chạy lệnh sau để giả lập AI vừa phát hiện người xâm nhập tại Camera số 1:
-   ```powershell
-   Invoke-RestMethod -Uri "http://localhost:8000/api/detections" -Method POST `
-     -Headers @{ "Authorization" = "Bearer smartsecure-ai-service-token-2026"; "Content-Type" = "application/json" } `
-     -Body '{"camera_id": 1, "object_type": "person", "confidence": 0.95, "event_type": "intrusion", "image_path": "uploads/events/test_intrusion.jpg"}'
-   ```
-   Ngay sau khi chạy lệnh, Web Dashboard sẽ tự động nhận sự kiện qua WebSocket và tạo cảnh báo **Nghiêm trọng (`CRITICAL`)**!
+   Dashboard nhận sự kiện qua WebSocket. Backend tạo cảnh báo `CRITICAL` khi điểm tin cậy đạt ngưỡng và sự kiện thỏa điều kiện chống trùng.
 
 #### B. Lắp mạch & Nạp code cho ESP32 (`iot-service/`)
 
-1. **Sơ đồ đấu nối chân GPIO trên ESP32 DevKit V1** (khớp với `iot-service/esp32/main.ino`):
+1. **Sơ đồ đấu nối chân GPIO trên ESP32 DevKit V1** khớp với firmware Rust.
 
    | Linh kiện | Chân Linh kiện | Chân ESP32 | Vai trò |
    | :--- | :--- | :---: | :--- |
@@ -230,22 +215,8 @@ python -m http.server 5500
    | **Còi báo động (Active Buzzer)** | (+) | **GPIO 25** | Bật/tắt còi hú (`buzzer_on` / `buzzer_off`) |
    | **Module Relay Kênh 2 (Khóa điện cửa)** | IN2 | **GPIO 33** | Khóa/mở cửa (`lock` / `unlock`) |
 
-2. **Nạp firmware bằng Arduino IDE**:
-   - Cài board **esp32 by Espressif Systems** trong Boards Manager.
-   - Cài 2 thư viện trong Library Manager: **`PubSubClient`** và **`ArduinoJson`**.
-   - Mở file `iot-service/esp32/main.ino`, sửa các dòng đầu tiên:
-     - `WIFI_SSID` và `WIFI_PASSWORD`: Tên và mật khẩu Wi-Fi.
-     - `MQTT_HOST`: Địa chỉ IPv4 LAN của máy tính đang chạy Docker (xem bằng lệnh `ipconfig` trên máy tính, ví dụ `192.168.1.10`).
-     - `DEVICE_ID`: Mã thiết bị đã tạo trên Web Dashboard (mặc định `ESP32_001`).
-   - Cắm cáp USB, chọn cổng COM và nhấn **Upload**.
-
-3. **Giả lập gửi dữ liệu cảm biến ESP32 khi chưa có mạch phần cứng thật**:
-   Bạn có thể giả lập mạch `ESP32_001` báo rò rỉ khí gas vượt ngưỡng (`mq2 = 750 ppm`) bằng lệnh PowerShell sau:
-   ```powershell
-   Invoke-RestMethod -Uri "http://localhost:8000/api/sensors/data" -Method POST `
-     -Headers @{ "Content-Type" = "application/json" } `
-     -Body '{"device_id": "ESP32_001", "pir": true, "mq2": 750, "relay": true, "buzzer": true, "lock": true}'
-   ```
+2. Cấu hình `MQTT_HOST` trong `iot-service/esp32/src/main.rs` bằng địa chỉ máy chạy broker trên mạng của ESP32. Đăng ký mã `DEVICE_ID` trên dashboard trước khi chạy firmware. [Hướng dẫn nạp firmware](../iot-service/README.md)
+3. Khi thử trên dashboard, chọn thiết bị đã đăng ký và dùng chức năng cập nhật cảm biến. Nếu gọi `POST /api/sensors/data` trực tiếp, gửi JWT người dùng trong header `Authorization`.
 
 ---
 
@@ -322,11 +293,7 @@ Hệ thống tự động kiểm tra sức khỏe thực tế của từng dịc
 
 ### Lỗi 1: Không đăng nhập được tài khoản `admin` dù gõ đúng mật khẩu trong `.env`
 - **Nguyên nhân**: Tài khoản `BOOTSTRAP_ADMIN` chỉ được tạo khi Database khởi tạo lần đầu hoặc chưa có user `admin`. Nếu trước đó bạn đã tạo volume database với mật khẩu cũ, mật khẩu cũ vẫn còn lưu trong DB.
-- **Cách khắc phục**: Reset lại volume database rồi bật lại:
-  ```powershell
-  docker compose down -v
-  docker compose up --build -d
-  ```
+- **Cách khắc phục**: Dùng mật khẩu của tài khoản đã lưu hoặc tạo một tài khoản quản trị với tên mới bằng biến `BOOTSTRAP_ADMIN_USERNAME` và dựng lại container backend.
 
 ### Lỗi 2: Lỗi `Bind for 0.0.0.0:8080 failed: port is already allocated` (hoặc cổng `5432`, `8000`, `1883`)
 - **Nguyên nhân**: Trên máy tính đang có một ứng dụng khác (như PostgreSQL cài sẵn trên Windows hoặc một container cũ) chiếm cổng đó.
@@ -334,10 +301,10 @@ Hệ thống tự động kiểm tra sức khỏe thực tế của từng dịc
 
 ### Lỗi 3: Mạch ESP32 kết nối được Wi-Fi nhưng báo lỗi kết nối MQTT (`failed, rc=-2`)
 - **Nguyên nhân**:
-  1. `MQTT_HOST` trong `main.ino` đang để `192.168.1.100` (chưa đổi sang IP thật của máy tính chạy Docker).
+  1. `MQTT_HOST` trong `iot-service/esp32/src/main.rs` chưa trỏ tới địa chỉ của máy chạy Docker.
   2. Tường lửa Windows (Windows Defender Firewall) chặn cổng `1883`.
 - **Cách khắc phục**:
-  1. Gõ `ipconfig` trên máy tính chạy Docker để lấy đúng `IPv4 Address` rồi điền vào `MQTT_HOST` trong `main.ino`.
+  1. Gõ `ipconfig` trên máy tính chạy Docker để lấy địa chỉ IPv4 rồi điền vào `MQTT_HOST`.
   2. Mở cổng `1883` TCP trong Windows Defender Firewall (Inbound Rules).
 
 ### Lỗi 4: Sửa code giao diện trong `frontend/` nhưng trình duyệt vẫn hiện giao diện cũ
