@@ -368,17 +368,28 @@ pub async fn sensor_data(
     let mq2_threshold = state.runtime_settings.read().await.mq2_threshold;
     if let Some(mq2) = data.mq2 {
         if mq2 >= mq2_threshold {
-            sqlx::query(
+            let al_row = sqlx::query(
                 "INSERT INTO alerts (detection_id, alert_type, severity, description, status, created_at)
-                 VALUES (NULL, 'gas_leak', 'CRITICAL', $1, 'OPEN', $2)",
+                 VALUES (NULL, 'gas_mq2', 'CRITICAL', $1, 'OPEN', $2) RETURNING id",
             )
             .bind(format!(
-                "Cảm biến MQ-2 vượt ngưỡng ({:.0} ppm) tại {}",
+                "BÁO CHÁY / KHÍ GAS: Cảm biến MQ-2 vượt ngưỡng ({:.0} ppm) tại {}",
                 mq2, device.device_name
             ))
             .bind(&ts)
-            .execute(&state.db)
+            .fetch_one(&state.db)
             .await?;
+            let aid = row_i64(&al_row, "id");
+            broadcast(
+                &state,
+                "alert.created",
+                json!({
+                    "id": aid,
+                    "alert_type": "gas_mq2",
+                    "severity": "CRITICAL",
+                    "status": "OPEN",
+                }),
+            );
         }
     }
 
@@ -386,7 +397,7 @@ pub async fn sensor_data(
         &state.db,
         "SENSOR_TELEMETRY",
         &format!(
-            "Cập nhật dữ liệu cảm biến từ {} (PIR={:?}, MQ-2={:?})",
+            "Cập nhật cảm biến PCCC từ {} (Flame={:?}, MQ-2={:?} ppm)",
             device.device_code, device.latest_pir, device.latest_mq2
         ),
         None,

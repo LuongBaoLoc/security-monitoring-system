@@ -13,7 +13,10 @@ use serde_json::{json, Value};
 use sqlx::any::AnyPoolOptions;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::{
+    cors::{Any, CorsLayer},
+    services::ServeDir,
+};
 use tracing::info;
 
 use crate::{
@@ -75,6 +78,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     giao_tiep_mqtt::start_mqtt(state.clone()).await;
 
+    std::fs::create_dir_all("uploads/events")?;
+
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -84,6 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/", get(root))
         .route("/health", get(health))
         .route("/ws/dashboard", get(ws_dashboard))
+        .nest_service("/uploads", ServeDir::new("uploads"))
         .nest("/api", dinh_tuyen_api::api_router())
         .layer(cors)
         .with_state(state);

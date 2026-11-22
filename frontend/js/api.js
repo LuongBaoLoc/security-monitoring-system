@@ -8,10 +8,14 @@
     me: null,
     overview: {},
     cameras: [],
+    cameraLocations: [],
+    monitorCameras: null,
+    mgmtCameras: null,
     devices: [],
     selectedDeviceCode: null,
     alerts: [],
     detections: [],
+    filteredDetections: null,
     detStats: [],
     alertStats: [],
     logs: [],
@@ -20,6 +24,36 @@
     settings: {},
     aiChipFilter: 'all'
   };
+  var camFilterTimer = null;
+  var aiFilterTimer = null;
+  var wsReconnectTimer = null;
+
+  function resolveUploadUrl(imagePath) {
+    if (!imagePath || typeof imagePath !== 'string') return null;
+    var clean = imagePath.trim().replace(/\\/g, '/').replace(/^\.\//, '');
+    if (!clean || clean.indexOf('..') >= 0 || clean.indexOf(':') >= 0) return null;
+    return clean.charAt(0) === '/' ? clean : ('/' + clean);
+  }
+
+  function requestMultipart(path, formData) {
+    var headers = {};
+    if (token) headers.Authorization = 'Bearer ' + token;
+    return fetch(apiRoot + path, {
+      method: 'POST',
+      headers: headers,
+      body: formData
+    }).then(function (response) {
+      if (!response.ok) {
+        return response.json().catch(function () { return {}; }).then(function (body) {
+          var err = new Error('API ' + response.status);
+          err.status = response.status;
+          err.detail = (body && body.detail) ? String(body.detail) : ('Lỗi HTTP ' + response.status);
+          throw err;
+        });
+      }
+      return response.json();
+    });
+  }
 
   function toast(msg) {
     if (window.smartSecureToast) window.smartSecureToast(msg);
@@ -78,7 +112,7 @@
       topRole.className = 'status ' + (me.role === 'ADMIN' ? 'info' : 'online');
     }
     if (sideRole) sideRole.textContent = roleText + ' (' + me.role + ')';
-    if (greeting) greeting.textContent = 'Xin chào, ' + me.full_name + ' (' + roleText + '). Đây là tình hình an ninh hôm nay.';
+    if (greeting) greeting.textContent = 'Xin chào, ' + me.full_name + ' (' + roleText + '). Đây là tình hình giám sát PCCC hôm nay.';
 
     document.querySelectorAll('[data-admin-only]').forEach(function (el) {
       var hide = me.role !== 'ADMIN';
@@ -105,6 +139,10 @@
     sessionStorage.removeItem('smartsecure_token');
     token = null;
     state.me = null;
+    if (wsReconnectTimer) {
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
     if (activeSocket) {
       activeSocket.close();
       activeSocket = null;
@@ -118,29 +156,52 @@
     box.id = 'ss-login';
     box.innerHTML =
       '<div class="ss-login-card">' +
-      '<div class="brand"><div class="brandmark">✓</div><div>SmartSecure<small>ĐĂNG NHẬP HỆ THỐNG</small></div></div>' +
-      '<form>' +
-      '<label>Tên đăng nhập<input name="username" autocomplete="username" required placeholder="Nhập username (vd: admin)"></label>' +
-      '<label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required placeholder="Nhập mật khẩu"></label>' +
+      '<div class="brand"><div class="brandmark">✓</div><div>SmartSecure<small>ĐĂNG NHẬP HỆ THỐNG GIÁM SÁT &amp; BÁO CHÁY PCCC</small></div></div>' +
+      '<form novalidate>' +
+      '<label>Tên đăng nhập<input name="username" autocomplete="username" required placeholder="Nhập tên đăng nhập (vd: admin)"></label>' +
+      '<label>Mật khẩu<div class="password-wrap"><input name="password" type="password" autocomplete="current-password" required placeholder="Nhập mật khẩu"><button type="button" class="password-toggle" aria-label="Hiện/ẩn mật khẩu">Hiện</button></div></label>' +
       '<p role="alert"></p>' +
       '<button class="btn primary" type="submit">Đăng nhập</button>' +
-      '<small>Hỗ trợ phân quyền Quản trị viên (ADMIN) và Nhân viên vận hành (OPERATOR).</small>' +
+      '<small>Hỗ trợ xác thực JWT & phân quyền Quản trị viên (ADMIN) / Nhân viên vận hành (OPERATOR).</small>' +
       '</form></div>';
     document.body.appendChild(box);
+    var userInput = box.querySelector('input[name="username"]');
+    var pwdInput = box.querySelector('input[name="password"]');
+    var togglePwd = box.querySelector('.password-toggle');
+    var submitBtn = box.querySelector('button[type="submit"]');
+    if (userInput) userInput.focus();
+    if (togglePwd && pwdInput) {
+      togglePwd.addEventListener('click', function () {
+        var showing = pwdInput.type === 'text';
+        pwdInput.type = showing ? 'password' : 'text';
+        togglePwd.textContent = showing ? 'Hiện' : 'Ẩn';
+      });
+    }
     box.querySelector('form').addEventListener('submit', function (event) {
       event.preventDefault();
-      var form = new FormData(event.currentTarget);
       var alertEl = box.querySelector('[role=alert]');
       alertEl.textContent = '';
+      var username = String(userInput.value || '').trim();
+      var password = String(pwdInput.value || '');
+      if (!username || !password) {
+        alertEl.textContent = 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.';
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Đang xác thực...';
       request('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username: String(form.get('username') || '').trim(), password: String(form.get('password') || '') })
+        body: JSON.stringify({ username: username, password: password })
       }).then(function (data) {
         token = data.access_token;
         sessionStorage.setItem('smartsecure_token', token);
+        if (data.user) applyUserRole(data.user);
         box.remove();
+        toast('Đăng nhập thành công.');
         refresh();
       }).catch(function (err) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Đăng nhập';
         alertEl.textContent = err.detail || 'Không thể đăng nhập. Kiểm tra thông tin và kết nối máy chủ.';
       });
     });
@@ -317,9 +378,9 @@
     var total = items.reduce(function (acc, item) { return acc + (item.count || 0); }, 0);
 
     var center = overview.querySelector('.donut-center');
-    if (center) center.innerHTML = total + '<small>đối tượng</small>';
+    if (center) center.innerHTML = total + '<small>sự kiện</small>';
     var aiNote = document.getElementById('ss-overview-ai-note');
-    if (aiNote) aiNote.textContent = total + ' lượt nhận diện';
+    if (aiNote) aiNote.textContent = total + ' lượt phát hiện Lửa/Khói';
     var donut = document.getElementById('ss-overview-donut');
 
     var legendList = overview.querySelector('.donut-wrap .legend-list');
@@ -329,25 +390,28 @@
       if (donut) donut.style.background = '#e2e8f0';
       var empty = document.createElement('div');
       empty.className = 'legend-row';
-      empty.textContent = 'Chưa có dữ liệu nhận diện';
+      empty.textContent = 'Chưa có dữ liệu nhận diện Lửa/Khói';
       legendList.appendChild(empty);
       return;
     }
-    var colors = ['#2563eb', '#f59e0b', '#10b981', '#8b5cf6'];
+    var colorByType = { fire: '#ef4444', flame: '#dc2626', smoke: '#f59e0b', gas_mq2: '#8b5cf6' };
+    var fallbackColors = ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6'];
     var stops = [];
     var currentDeg = 0;
-    var labelMap = { person: 'Người', car: 'Xe ô tô', truck: 'Xe tải', vehicle: 'Phương tiện', animal: 'Động vật', fire: 'Lửa / Cháy', smoke: 'Khói', weapon: 'Vũ khí' };
+    var labelMap = { fire: 'Lửa (Fire)', flame: 'Tia lửa (Flame)', smoke: 'Khói (Smoke)', gas_mq2: 'Khí gas MQ-2', other: 'Khác' };
     items.slice(0, 4).forEach(function (item, idx) {
       var pct = Math.round((item.count / total) * 100);
       var nextDeg = idx === items.slice(0, 4).length - 1 ? 100 : (currentDeg + pct);
-      stops.push(colors[idx % colors.length] + ' ' + currentDeg + '% ' + nextDeg + '%');
+      var key = String(item.object_type || '').toLowerCase();
+      var color = colorByType[key] || fallbackColors[idx % fallbackColors.length];
+      stops.push(color + ' ' + currentDeg + '% ' + nextDeg + '%');
       currentDeg = nextDeg;
 
       var row = document.createElement('div');
       row.className = 'legend-row';
       var dot = document.createElement('i');
-      dot.style.background = colors[idx % colors.length];
-      var label = document.createTextNode(labelMap[item.object_type] || item.object_type);
+      dot.style.background = color;
+      var label = document.createTextNode(labelMap[key] || item.object_type);
       var strong = document.createElement('strong');
       strong.textContent = pct + '% (' + item.count + ')';
       row.appendChild(dot);
@@ -459,7 +523,7 @@
       var card = document.createElement('button');
       card.className = 'quick-cam-card';
       card.innerHTML = isOnline
-        ? '<span class="quick-preview"><i class="quick-person"></i><b class="live-tag">● LIVE</b></span><span class="quick-copy"><strong></strong><small></small></span>'
+        ? '<span class="quick-preview"><b class="live-tag">● LIVE RTSP</b></span><span class="quick-copy"><strong></strong><small></small></span>'
         : '<span class="quick-preview scene-offline"><span class="offline-copy"><span class="dot offline"></span>Tạm thời chưa hoạt động</span><b class="live-tag offline-tag">OFFLINE</b></span><span class="quick-copy"><strong></strong><small></small></span>';
       card.querySelector('strong').textContent = cam.name;
       card.querySelector('small').textContent = (cam.location || 'Chưa rõ vị trí') + ' · ' + (isOnline ? 'Đang hoạt động' : 'Tạm thời chưa hoạt động');
@@ -473,53 +537,115 @@
   /* ==================== 2 & 7. CAMERAS (MONITOR & MANAGEMENT) ==================== */
   function openCameraDetailModal(cam) {
     var isOnline = cam.status === 'ONLINE';
+    var camId = cam.camera_id != null ? cam.camera_id : cam.id;
     var backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
     backdrop.innerHTML =
       '<div class="modal camera-detail-modal" role="dialog" aria-modal="true">' +
       '<div class="modal-head"><span class="camera-detail-title"></span><button class="modal-close" aria-label="Đóng">×</button></div>' +
       (isOnline
-        ? '<div class="camera-detail-scene"><span class="scene-building"></span><span class="scene-ground"></span><span class="person-shape"></span><span class="bbox"></span><span class="bbox-label">LIVE STREAM</span></div>'
+        ? '<div class="camera-detail-scene"><span class="scene-building"></span><span class="scene-ground"></span><span class="bbox-label">LIVE RTSP · PCCC</span></div>'
         : '<div class="camera-detail-scene scene-offline"><span class="offline-copy"><span class="dot offline"></span>Tạm thời chưa hoạt động (Camera đang Offline)</span></div>') +
       '<div class="settings-list">' +
+      '<div><span>Mã Camera (camera_id)</span><span class="cam-id-badge" data-cam-id></span></div>' +
       '<div><span>Tên Camera</span><strong data-cam-name></strong></div>' +
       '<div><span>Khu vực lắp đặt</span><strong data-cam-loc></strong></div>' +
       '<div><span>Địa chỉ IP</span><strong data-cam-ip></strong></div>' +
-      '<div><span>Luồng RTSP (đã bảo mật)</span><strong data-cam-rtsp></strong></div>' +
+      '<div><span>Luồng RTSP (đã che mật khẩu)</span><strong data-cam-rtsp style="font-family:var(--ss-font-mono);font-size:12px"></strong></div>' +
       '<div><span>Trạng thái thực tế</span><span class="status ' + (isOnline ? 'online' : 'unknown') + '"><span class="dot ' + (isOnline ? '' : 'offline') + '"></span>' + (isOnline ? 'Đang hoạt động' : 'Tạm thời chưa hoạt động') + '</span></div>' +
       '</div></div>';
-    backdrop.querySelector('.camera-detail-title').textContent = cam.name;
+    backdrop.querySelector('.camera-detail-title').textContent = cam.name + ' (ID #' + camId + ')';
+    backdrop.querySelector('[data-cam-id]').textContent = 'camera_id: #' + camId;
     backdrop.querySelector('[data-cam-name]').textContent = cam.name;
     backdrop.querySelector('[data-cam-loc]').textContent = cam.location || 'Chưa đặt vị trí';
     backdrop.querySelector('[data-cam-ip]').textContent = cam.ip_address || '—';
-    backdrop.querySelector('[data-cam-rtsp]').textContent = cam.rtsp_url || '—';
+    backdrop.querySelector('[data-cam-rtsp]').textContent = (cam.rtsp_url || '—') + (cam.rtsp_has_credentials ? ' (Đã bảo vệ mật khẩu)' : '');
     document.getElementById('ss-modal-root').appendChild(backdrop);
     function close() { backdrop.remove(); }
     backdrop.querySelector('.modal-close').addEventListener('click', close);
     backdrop.addEventListener('click', function (e) { if (e.target === backdrop) close(); });
   }
 
+  function populateLocationSelect(selectEl, locations) {
+    if (!selectEl) return;
+    var prevVal = selectEl.value || 'all';
+    selectEl.replaceChildren();
+    var allOpt = document.createElement('option');
+    allOpt.value = 'all';
+    allOpt.textContent = 'Tất cả khu vực';
+    selectEl.appendChild(allOpt);
+    locations.forEach(function (loc) {
+      var opt = document.createElement('option');
+      opt.value = loc;
+      opt.textContent = loc;
+      selectEl.appendChild(opt);
+    });
+    if (prevVal !== 'all' && locations.indexOf(prevVal) >= 0) {
+      selectEl.value = prevVal;
+    }
+  }
+
+  function buildCameraQueryString(search, location, status) {
+    var qs = ['limit=100'];
+    if (search) qs.push('search=' + encodeURIComponent(search));
+    if (location && location !== 'all') qs.push('location=' + encodeURIComponent(location));
+    if (status && status !== 'all') qs.push('status=' + encodeURIComponent(status.toUpperCase()));
+    return '/cameras?' + qs.join('&');
+  }
+
+  function fetchFilteredCameras(scope) {
+    if (!token) return;
+    if (scope === 'monitor') {
+      var searchInput = document.querySelector('[data-camera-search]');
+      var regionSelect = document.querySelector('[data-camera-region]');
+      var statusSelect = document.querySelector('[data-camera-status]');
+      var path = buildCameraQueryString(
+        searchInput ? searchInput.value.trim() : '',
+        regionSelect ? regionSelect.value : 'all',
+        statusSelect ? statusSelect.value : 'all'
+      );
+      request(path).then(function (res) {
+        state.monitorCameras = (res && res.items) || [];
+        if (res && Array.isArray(res.locations)) state.cameraLocations = res.locations;
+        renderCamerasViews();
+      }).catch(function () {});
+    } else if (scope === 'mgmt') {
+      var mgmtSearch = document.getElementById('ss-cam-mgmt-search');
+      var mgmtLoc = document.getElementById('ss-cam-mgmt-location');
+      var mgmtStatus = document.getElementById('ss-cam-mgmt-status');
+      var mPath = buildCameraQueryString(
+        mgmtSearch ? mgmtSearch.value.trim() : '',
+        mgmtLoc ? mgmtLoc.value : 'all',
+        mgmtStatus ? mgmtStatus.value : 'all'
+      );
+      request(mPath).then(function (res) {
+        state.mgmtCameras = (res && res.items) || [];
+        if (res && Array.isArray(res.locations)) state.cameraLocations = res.locations;
+        renderCamerasViews();
+      }).catch(function () {});
+    }
+  }
+
   function renderCamerasViews() {
     var items = state.cameras;
+    var locations = state.cameraLocations && state.cameraLocations.length
+      ? state.cameraLocations
+      : items.reduce(function (acc, c) {
+          if (c.location && acc.indexOf(c.location) < 0) acc.push(c.location);
+          return acc;
+        }, []);
+
     var regionSelect = document.querySelector('[data-camera-region]');
-    if (regionSelect) {
-      var prevVal = regionSelect.value || 'all';
-      var regions = [];
-      items.forEach(function (c) {
-        if (c.location && regions.indexOf(c.location) < 0) regions.push(c.location);
-      });
-      regionSelect.innerHTML = '<option value="all">Tất cả khu vực</option>' +
-        regions.map(function (r) { return '<option value="' + r.toLowerCase() + '">' + r + '</option>'; }).join('');
-      if (prevVal !== 'all' && regions.map(function (r) { return r.toLowerCase(); }).indexOf(prevVal) >= 0) {
-        regionSelect.value = prevVal;
-      }
-    }
+    var mgmtLocSelect = document.getElementById('ss-cam-mgmt-location');
+    populateLocationSelect(regionSelect, locations);
+    populateLocationSelect(mgmtLocSelect, locations);
 
     var searchInput = document.querySelector('[data-camera-search]');
     var statusSelect = document.querySelector('[data-camera-status]');
     var q = searchInput ? searchInput.value.trim().toLowerCase() : '';
     var reg = regionSelect ? regionSelect.value : 'all';
     var st = statusSelect ? statusSelect.value : 'all';
+    var hasMonitorFilter = Boolean(q || reg !== 'all' || st !== 'all');
 
     var gallery = document.querySelector('[data-page="monitor"] .camera-gallery');
     var monitorPill = document.getElementById('ss-monitor-head-pill');
@@ -535,12 +661,14 @@
     }
     if (gallery) {
       gallery.replaceChildren();
-      var filteredMonitor = items.filter(function (cam) {
-        var matchQ = !q || (cam.name + ' ' + (cam.location || '') + ' ' + (cam.ip_address || '')).toLowerCase().indexOf(q) >= 0;
-        var matchReg = reg === 'all' || (cam.location || '').toLowerCase() === reg;
-        var matchSt = st === 'all' || (st === 'online' ? cam.status === 'ONLINE' : cam.status !== 'ONLINE');
-        return matchQ && matchReg && matchSt;
-      });
+      var filteredMonitor = (hasMonitorFilter && Array.isArray(state.monitorCameras))
+        ? state.monitorCameras
+        : items.filter(function (cam) {
+            var matchQ = !q || (cam.name + ' ' + (cam.location || '') + ' ' + (cam.ip_address || '')).toLowerCase().indexOf(q) >= 0;
+            var matchReg = reg === 'all' || (cam.location || '').toLowerCase() === reg.toLowerCase();
+            var matchSt = st === 'all' || (st.toLowerCase() === 'online' ? cam.status === 'ONLINE' : cam.status !== 'ONLINE');
+            return matchQ && matchReg && matchSt;
+          });
       if (!filteredMonitor.length) {
         var empty = document.createElement('div');
         empty.style.color = '#64748b';
@@ -550,16 +678,17 @@
       } else {
         filteredMonitor.forEach(function (cam) {
           var isOnline = cam.status === 'ONLINE';
+          var camId = cam.camera_id != null ? cam.camera_id : cam.id;
           var card = document.createElement('article');
           card.className = 'camera-card';
           card.innerHTML =
             (isOnline
-              ? '<div class="camera-scene"><span class="scene-building"></span><span class="scene-ground"></span><span class="person-shape"></span><span class="camera-live">● LIVE</span></div>'
-              : '<div class="camera-scene scene-offline"><span class="camera-live offline-tag"><span class="dot offline"></span>OFFLINE</span><span class="offline-copy">Tạm thời chưa hoạt động</span></div>') +
+              ? '<div class="camera-scene"><span class="scene-building"></span><span class="scene-ground"></span><span class="camera-live">● LIVE</span><span class="ai-id-tag">ID #' + camId + '</span></div>'
+              : '<div class="camera-scene scene-offline"><span class="camera-live offline-tag"><span class="dot offline"></span>OFFLINE</span><span class="ai-id-tag">ID #' + camId + '</span><span class="offline-copy">Tạm thời chưa hoạt động</span></div>') +
             '<div class="camera-info"><div><strong></strong><small></small></div><span class="status ' + (isOnline ? 'online' : 'unknown') + '"><span class="dot ' + (isOnline ? '' : 'offline') + '"></span>' + (isOnline ? 'Đang hoạt động' : 'Tạm thời chưa hoạt động') + '</span></div>' +
             '<button class="btn camera-detail">Xem chi tiết</button>';
           card.querySelector('strong').textContent = cam.name;
-          card.querySelector('small').textContent = (cam.location || 'Chưa đặt vị trí') + (cam.ip_address ? ' · ' + cam.ip_address : '');
+          card.querySelector('small').textContent = 'camera_id: #' + camId + ' · ' + (cam.location || 'Chưa đặt vị trí') + (cam.ip_address ? ' · ' + cam.ip_address : '');
           card.querySelector('.camera-detail').addEventListener('click', function () {
             openCameraDetailModal(cam);
           });
@@ -572,13 +701,18 @@
     var mgmtSearch = document.getElementById('ss-cam-mgmt-search');
     var mgmtStatus = document.getElementById('ss-cam-mgmt-status');
     var mq = mgmtSearch ? mgmtSearch.value.trim().toLowerCase() : '';
+    var mloc = mgmtLocSelect ? mgmtLocSelect.value : 'all';
     var mst = mgmtStatus ? mgmtStatus.value : 'all';
+    var hasMgmtFilter = Boolean(mq || mloc !== 'all' || mst !== 'all');
 
-    var filteredMgmt = items.filter(function (cam) {
-      var matchQ = !mq || (cam.name + ' ' + (cam.location || '') + ' ' + (cam.ip_address || '') + ' ' + (cam.rtsp_url || '')).toLowerCase().indexOf(mq) >= 0;
-      var matchSt = mst === 'all' || cam.status === mst;
-      return matchQ && matchSt;
-    });
+    var filteredMgmt = (hasMgmtFilter && Array.isArray(state.mgmtCameras))
+      ? state.mgmtCameras
+      : items.filter(function (cam) {
+          var matchQ = !mq || (cam.name + ' ' + (cam.location || '') + ' ' + (cam.ip_address || '')).toLowerCase().indexOf(mq) >= 0;
+          var matchLoc = mloc === 'all' || (cam.location || '').toLowerCase() === mloc.toLowerCase();
+          var matchSt = mst === 'all' || cam.status === mst;
+          return matchQ && matchLoc && matchSt;
+        });
 
     var camBody = document.querySelector('[data-page="cameras"] .table tbody');
     var camFoot = document.querySelector('[data-page="cameras"] .table-foot span');
@@ -586,38 +720,48 @@
     if (camBody) {
       camBody.replaceChildren();
       if (!filteredMgmt.length) {
-        camBody.appendChild(emptyRow(6, items.length ? 'Không có camera khớp bộ lọc.' : 'Chưa có camera nào trong cơ sở dữ liệu.'));
+        camBody.appendChild(emptyRow(7, items.length ? 'Không có camera khớp bộ lọc.' : 'Chưa có camera nào trong cơ sở dữ liệu.'));
       } else {
         filteredMgmt.forEach(function (cam) {
           var tr = document.createElement('tr');
           var isOnline = cam.status === 'ONLINE';
+          var camId = cam.camera_id != null ? cam.camera_id : cam.id;
           tr.innerHTML =
+            '<td><span class="cam-id-badge">#' + camId + '</span></td>' +
             '<td><strong></strong><small style="display:block;color:var(--ss-muted);font-family:var(--ss-font-mono);font-size:11px;margin-top:2px"></small></td>' +
             '<td></td><td style="font-family:var(--ss-font-mono);font-size:12px"></td>' +
-            '<td><span class="status ' + (isOnline ? 'online' : 'offline') + '"><span class="dot ' + (isOnline ? '' : 'red') + '"></span>' + cam.status + '</span></td>' +
+            '<td><span class="status ' + (isOnline ? 'online' : 'unknown') + '"><span class="dot ' + (isOnline ? '' : 'offline') + '"></span>' + (isOnline ? 'ONLINE' : 'OFFLINE') + '</span></td>' +
             '<td style="font-family:var(--ss-font-mono);font-size:11.5px"></td><td><div class="table-actions"></div></td>';
           var tds = tr.querySelectorAll('td');
-          var actionsWrap = tds[5].querySelector('.table-actions');
-          tds[0].querySelector('strong').textContent = cam.name;
-          tds[0].querySelector('small').textContent = cam.ip_address || 'IP chưa đặt';
-          tds[1].textContent = cam.location || '—';
-          tds[2].textContent = cam.rtsp_url || '—';
-          tds[4].textContent = cam.last_seen ? new Date(cam.last_seen).toLocaleString('vi-VN') : 'Chưa kết nối';
+          var actionsWrap = tds[6].querySelector('.table-actions');
+          tds[1].querySelector('strong').textContent = cam.name;
+          tds[1].querySelector('small').textContent = 'camera_id: ' + camId + ' · ' + (cam.ip_address || 'IP chưa đặt');
+          tds[2].textContent = cam.location || '—';
+          tds[3].textContent = cam.rtsp_url || '—';
+          if (cam.rtsp_has_credentials) {
+            var shield = document.createElement('span');
+            shield.className = 'rtsp-shield-tag';
+            shield.textContent = 'Đã che mật khẩu';
+            tds[3].appendChild(shield);
+          }
+          tds[5].textContent = cam.last_seen ? new Date(cam.last_seen).toLocaleString('vi-VN') : 'Chưa kết nối';
 
           if (isAdmin()) {
             var editBtn = document.createElement('button');
             editBtn.className = 'btn subtle';
-            editBtn.setAttribute('data-edit-cam', cam.id);
+            editBtn.setAttribute('data-edit-cam', camId);
             editBtn.textContent = 'Sửa';
             editBtn.addEventListener('click', function () { openCameraFormModal(cam); });
 
             var delBtn = document.createElement('button');
             delBtn.className = 'btn danger';
-            delBtn.setAttribute('data-del-cam', cam.id);
+            delBtn.setAttribute('data-del-cam', camId);
             delBtn.textContent = 'Xóa';
             delBtn.addEventListener('click', function () {
-              confirmAction('Bạn có chắc muốn xóa camera "' + cam.name + '"?', function () {
-                request('/cameras/' + cam.id, { method: 'DELETE' }).then(function () {
+              confirmAction('Bạn có chắc muốn xóa camera "' + cam.name + '" (camera_id #' + camId + ')?', function () {
+                request('/cameras/' + camId, { method: 'DELETE' }).then(function () {
+                  state.monitorCameras = null;
+                  state.mgmtCameras = null;
                   toast('Đã xóa camera thành công.');
                   refreshDataOnly();
                 }).catch(function (err) {
@@ -636,7 +780,128 @@
     }
   }
 
-  /* ==================== 3. AI MONITORING ==================== */
+  /* ==================== 3. AI MONITORING (SNAPSHOTS, TABLE, DETAIL MODAL, REALTIME) ==================== */
+  function attachSnapshotElement(container, imagePath, altText, isThumb) {
+    var url = resolveUploadUrl(imagePath);
+    function showFallback() {
+      container.classList.remove('has-snapshot');
+      var fb = document.createElement('div');
+      fb.className = isThumb ? 'ai-thumb-fallback' : 'ai-snapshot-fallback';
+      fb.innerHTML = isThumb
+        ? 'No img'
+        : '<span style="font-size:20px;opacity:0.8">📷</span><span>Chưa có ảnh snapshot</span>';
+      container.appendChild(fb);
+    }
+    if (!url) {
+      showFallback();
+      return;
+    }
+    container.classList.add('has-snapshot');
+    var img = document.createElement('img');
+    img.className = isThumb ? '' : 'ai-snapshot';
+    img.src = url;
+    img.alt = altText || 'Snapshot AI';
+    img.loading = 'lazy';
+    img.addEventListener('error', function () {
+      img.remove();
+      showFallback();
+    });
+    container.appendChild(img);
+  }
+
+  function openDetectionDetailModal(eventId) {
+    var backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML =
+      '<div class="modal detection-detail-modal" role="dialog" aria-modal="true">' +
+      '<div class="modal-head"><span>Chi tiết sự kiện AI #' + eventId + '</span><button class="modal-close" aria-label="Đóng">×</button></div>' +
+      '<div class="detection-detail-body" style="color:var(--ss-muted);padding:16px 0;text-align:center">Đang tải chi tiết sự kiện từ máy chủ...</div>' +
+      '</div>';
+    document.getElementById('ss-modal-root').appendChild(backdrop);
+    function close() { backdrop.remove(); }
+    backdrop.querySelector('.modal-close').addEventListener('click', close);
+    backdrop.addEventListener('click', function (e) { if (e.target === backdrop) close(); });
+
+    request('/detections/' + eventId).then(function (det) {
+      var body = backdrop.querySelector('.detection-detail-body');
+      body.style.textAlign = 'left';
+      body.style.padding = '0';
+      body.style.color = 'inherit';
+
+      var pct = ((det.confidence || 0) * 100).toFixed(1);
+      var evLower = String(det.event_type || '').toLowerCase();
+      var isFire = evLower === 'fire' || evLower === 'flame';
+      var isSmoke = evLower === 'smoke';
+      var badgeCls = (isFire || (isSmoke && (det.confidence || 0) >= 0.85)) ? 'critical' : (isSmoke ? 'warning' : 'info');
+
+      body.innerHTML =
+        '<div class="detection-detail-media"></div>' +
+        '<div class="settings-list">' +
+        '<div><span>ID sự kiện</span><span class="cam-id-badge">#' + det.id + '</span></div>' +
+        '<div><span>Camera</span><strong data-det-cam></strong></div>' +
+        '<div><span>Khu vực lắp đặt</span><strong data-det-loc></strong></div>' +
+        '<div><span>Đối tượng nhận diện</span><strong data-det-obj></strong></div>' +
+        '<div><span>Loại sự kiện</span><span class="status ' + badgeCls + '">' + String(det.event_type || 'object').toUpperCase() + '</span></div>' +
+        '<div><span>Độ tin cậy AI</span><strong style="font-family:var(--ss-font-mono)">' + pct + '%</strong></div>' +
+        '<div><span>Thời điểm phát hiện</span><strong data-det-time style="font-family:var(--ss-font-mono);font-size:12px"></strong></div>' +
+        '<div><span>Đường dẫn ảnh snapshot</span><strong data-det-path style="font-family:var(--ss-font-mono);font-size:11.5px;word-break:break-all"></strong></div>' +
+        '</div>' +
+        '<div class="detection-alerts-box" data-det-alerts></div>';
+
+      attachSnapshotElement(
+        body.querySelector('.detection-detail-media'),
+        det.image_url || det.image_path,
+        'Snapshot sự kiện #' + det.id,
+        false
+      );
+      body.querySelector('[data-det-cam]').textContent = (det.camera_name || ('Camera #' + det.camera_id)) + ' (camera_id: #' + det.camera_id + ')';
+      body.querySelector('[data-det-loc]').textContent = det.camera_location || 'Chưa đặt vị trí';
+      body.querySelector('[data-det-obj]').textContent = det.object_type || '—';
+      body.querySelector('[data-det-time]').textContent = det.timestamp ? new Date(det.timestamp).toLocaleString('vi-VN') : '—';
+      body.querySelector('[data-det-path]').textContent = det.image_path || 'Chưa lưu ảnh snapshot';
+
+      var alertsBox = body.querySelector('[data-det-alerts]');
+      if (det.alerts && det.alerts.length) {
+        alertsBox.innerHTML = '<div style="font-size:12px;font-weight:700;margin-bottom:8px">Cảnh báo an ninh liên quan (' + det.alerts.length + ')</div>';
+        det.alerts.forEach(function (al) {
+          var row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.justifyContent = 'space-between';
+          row.style.gap = '8px';
+          row.style.padding = '6px 0';
+          row.style.fontSize = '12px';
+          row.innerHTML = '<span></span><span>' + formatSeverityBadge(al.severity) + ' ' + formatAlertStatusBadge(al.status) + '</span>';
+          row.querySelector('span').textContent = '#' + al.id + ' · ' + al.description;
+          alertsBox.appendChild(row);
+        });
+      } else {
+        alertsBox.innerHTML = '<div style="font-size:12px;color:var(--ss-muted)">Sự kiện này không kích hoạt cảnh báo mới (dưới ngưỡng hoặc được gộp trùng).</div>';
+      }
+    }).catch(function (err) {
+      var body = backdrop.querySelector('.detection-detail-body');
+      body.textContent = err.detail || 'Không thể tải chi tiết sự kiện AI.';
+    });
+  }
+
+  function fetchFilteredDetections() {
+    if (!token) return;
+    var camSel = document.getElementById('ss-ai-camera-filter');
+    var evSel = document.getElementById('ss-ai-event-filter');
+    var confSel = document.getElementById('ss-ai-conf-filter');
+
+    var qs = ['limit=100'];
+    if (camSel && camSel.value !== 'all') qs.push('camera_id=' + encodeURIComponent(camSel.value));
+    if (state.aiChipFilter && state.aiChipFilter !== 'all') qs.push('object_type=' + encodeURIComponent(state.aiChipFilter));
+    if (evSel && evSel.value !== 'all') qs.push('event_type=' + encodeURIComponent(evSel.value));
+    if (confSel && parseFloat(confSel.value) > 0) qs.push('min_confidence=' + encodeURIComponent(confSel.value));
+
+    request('/detections?' + qs.join('&')).then(function (res) {
+      state.filteredDetections = (res && res.items) || [];
+      renderAiView();
+    }).catch(function () {});
+  }
+
   function renderAiView() {
     var detItems = state.detections;
     var aiHeadPill = document.getElementById('ss-ai-head-pill');
@@ -647,64 +912,151 @@
         ? '<i class="dot"></i>AI Worker: Đang hoạt động'
         : '<i class="dot offline"></i>AI Worker: Tạm thời chưa hoạt động';
     }
-    var personCount = detItems.filter(function (d) { return d.object_type === 'person'; }).length;
-    var vehicleCount = detItems.filter(function (d) { return ['car', 'truck', 'vehicle', 'motorcycle', 'bus'].indexOf(d.object_type) >= 0; }).length;
-    var otherCount = Math.max(0, detItems.length - personCount - vehicleCount);
+
+    // Đồng bộ dropdown chọn Camera trong trang AI
+    var camFilter = document.getElementById('ss-ai-camera-filter');
+    if (camFilter) {
+      var prevCam = camFilter.value || 'all';
+      camFilter.replaceChildren();
+      var optAll = document.createElement('option');
+      optAll.value = 'all';
+      optAll.textContent = 'Tất cả Camera';
+      camFilter.appendChild(optAll);
+      state.cameras.forEach(function (c) {
+        var cid = c.camera_id != null ? c.camera_id : c.id;
+        var opt = document.createElement('option');
+        opt.value = String(cid);
+        opt.textContent = '#' + cid + ' · ' + c.name;
+        camFilter.appendChild(opt);
+      });
+      if (prevCam !== 'all' && state.cameras.some(function (c) { return String(c.id) === prevCam; })) {
+        camFilter.value = prevCam;
+      }
+    }
+
+    var fireCount = detItems.filter(function (d) {
+      var t = String(d.object_type || '').toLowerCase();
+      return t === 'fire' || t === 'flame';
+    }).length;
+    var smokeCount = detItems.filter(function (d) {
+      return String(d.object_type || '').toLowerCase() === 'smoke';
+    }).length;
+    var otherCount = Math.max(0, detItems.length - fireCount - smokeCount);
 
     var aiCountAll = document.querySelector('[data-ai-count="all"]');
-    var aiCountPerson = document.querySelector('[data-ai-count="person"]');
-    var aiCountVehicle = document.querySelector('[data-ai-count="vehicle"]');
+    var aiCountFire = document.querySelector('[data-ai-count="fire"]');
+    var aiCountSmoke = document.querySelector('[data-ai-count="smoke"]');
     var aiCountOther = document.querySelector('[data-ai-count="other"]');
     if (aiCountAll) aiCountAll.textContent = detItems.length;
-    if (aiCountPerson) aiCountPerson.textContent = personCount;
-    if (aiCountVehicle) aiCountVehicle.textContent = vehicleCount;
+    if (aiCountFire) aiCountFire.textContent = fireCount;
+    if (aiCountSmoke) aiCountSmoke.textContent = smokeCount;
     if (aiCountOther) aiCountOther.textContent = otherCount;
 
     var evFilter = document.getElementById('ss-ai-event-filter');
+    var confFilter = document.getElementById('ss-ai-conf-filter');
     var searchIn = document.getElementById('ss-ai-search');
+    var camVal = camFilter ? camFilter.value : 'all';
     var evVal = evFilter ? evFilter.value : 'all';
+    var minConf = confFilter ? (parseFloat(confFilter.value) || 0) : 0;
     var q = searchIn ? searchIn.value.trim().toLowerCase() : '';
+    var hasServerFilter = Boolean(camVal !== 'all' || state.aiChipFilter !== 'all' || evVal !== 'all' || minConf > 0);
 
-    var filtered = detItems.filter(function (d) {
-      var isVeh = ['car', 'truck', 'vehicle', 'motorcycle', 'bus'].indexOf(d.object_type) >= 0;
+    var sourceList = (hasServerFilter && Array.isArray(state.filteredDetections))
+      ? state.filteredDetections
+      : detItems;
+
+    var filtered = sourceList.filter(function (d) {
+      var objLower = String(d.object_type || '').toLowerCase();
+      var evLower = String(d.event_type || '').toLowerCase();
+      var isFire = objLower === 'fire' || objLower === 'flame';
+      var isSmoke = objLower === 'smoke';
+      var matchCam = camVal === 'all' || String(d.camera_id) === camVal;
       var matchChip =
         state.aiChipFilter === 'all' ||
-        (state.aiChipFilter === 'person' && d.object_type === 'person') ||
-        (state.aiChipFilter === 'vehicle' && isVeh) ||
-        (state.aiChipFilter === 'other' && d.object_type !== 'person' && !isVeh);
-      var matchEv = evVal === 'all' || d.event_type === evVal || (evVal === 'fire' && (d.event_type === 'fire' || d.event_type === 'smoke'));
-      var matchQ = !q || (d.object_type + ' ' + d.event_type + ' ' + (d.camera_name || '')).toLowerCase().indexOf(q) >= 0;
-      return matchChip && matchEv && matchQ;
+        (state.aiChipFilter === 'fire' && isFire) ||
+        (state.aiChipFilter === 'smoke' && isSmoke) ||
+        (state.aiChipFilter === 'other' && !isFire && !isSmoke);
+      var matchEv =
+        evVal === 'all' ||
+        (evVal === 'fire' && (evLower === 'fire' || evLower === 'flame')) ||
+        (evVal === 'smoke' && evLower === 'smoke') ||
+        (evVal === 'other' && evLower !== 'fire' && evLower !== 'flame' && evLower !== 'smoke');
+      var matchConf = (d.confidence || 0) >= minConf;
+      var matchQ = !q || (d.object_type + ' ' + d.event_type + ' ' + (d.camera_name || '') + ' ' + d.camera_id).toLowerCase().indexOf(q) >= 0;
+      return matchCam && matchChip && matchEv && matchConf && matchQ;
     });
 
     var aiGrid = document.querySelector('[data-page="ai"] .ai-grid');
+    var aiTableBody = document.getElementById('ss-ai-table-body');
     var aiFoot = document.querySelector('[data-page="ai"] .table-foot span');
     if (aiFoot) aiFoot.textContent = 'Tổng cộng ' + filtered.length + ' sự kiện';
+
     if (aiGrid) {
       aiGrid.replaceChildren();
       if (!filtered.length) {
         var empty = document.createElement('div');
         empty.style.color = '#64748b';
         empty.style.padding = '24px';
-        empty.innerHTML = '<span class="dot offline"></span>' + (detItems.length ? 'Không có sự kiện AI khớp bộ lọc.' : 'Tạm thời chưa hoạt động — Chưa kết nối luồng Camera RTSP với AI Worker (YOLOv8).');
+        empty.innerHTML = '<span class="dot offline"></span>' + (detItems.length ? 'Không có sự kiện Lửa/Khói khớp bộ lọc.' : 'Tạm thời chưa hoạt động — Chưa kết nối luồng Camera RTSP với AI Worker (YOLOv8 Lửa & Khói).');
         aiGrid.appendChild(empty);
       } else {
-        filtered.forEach(function (d) {
-          var pct = (d.confidence * 100).toFixed(1);
-          var isCrit = ['intrusion', 'weapon', 'fire'].indexOf(String(d.event_type).toLowerCase()) >= 0;
-          var badgeCls = isCrit ? 'critical' : (d.event_type === 'person' ? 'warning' : 'info');
+        filtered.slice(0, 12).forEach(function (d) {
+          var pct = ((d.confidence || 0) * 100).toFixed(1);
+          var evLower = String(d.event_type || '').toLowerCase();
+          var isFire = evLower === 'fire' || evLower === 'flame';
+          var isSmoke = evLower === 'smoke';
+          var badgeCls = (isFire || (isSmoke && (d.confidence || 0) >= 0.85)) ? 'critical' : (isSmoke ? 'warning' : 'info');
           var card = document.createElement('article');
           card.className = 'ai-card';
+          card.title = 'Nhấn để xem chi tiết sự kiện #' + d.id;
           card.innerHTML =
-            '<div class="ai-image"><i class="person-shape"></i><i class="bbox"></i><span class="bbox-label"></span></div>' +
-            '<div class="ai-meta"><div class="ai-title"><strong></strong><span class="status ' + badgeCls + '">' + d.event_type.toUpperCase() + '</span></div>' +
+            '<div class="ai-image"><span class="ai-img-badge"></span><span class="ai-id-tag">#' + d.id + '</span></div>' +
+            '<div class="ai-meta"><div class="ai-title"><strong></strong><span class="status ' + badgeCls + '">' + String(d.event_type || 'other').toUpperCase() + '</span></div>' +
             '<div class="ai-sub"></div>' +
-            '<div class="confidence"><i style="width:' + pct + '%"></i></div>' +
-            '<div class="ai-foot"><span>Độ tin cậy</span><strong>' + pct + '%</strong></div></div>';
-          card.querySelector('.bbox-label').textContent = d.object_type + ' ' + d.confidence.toFixed(2);
-          card.querySelector('.ai-title strong').textContent = d.object_type + ' · ' + d.event_type;
-          card.querySelector('.ai-sub').textContent = (d.camera_name || ('CAM #' + d.camera_id)) + ' · ' + new Date(d.timestamp).toLocaleTimeString('vi-VN');
+            '<div class="confidence"><i style="width:' + pct + '%;background:' + (isFire ? '#ef4444' : (isSmoke ? '#f59e0b' : '#3b82f6')) + '"></i></div>' +
+            '<div class="ai-foot"><span>Độ tin cậy · Nhấn xem chi tiết</span><strong>' + pct + '%</strong></div></div>';
+          var imgWrap = card.querySelector('.ai-image');
+          attachSnapshotElement(imgWrap, d.image_path, d.object_type + ' - ' + (d.camera_name || ('CAM #' + d.camera_id)), false);
+          card.querySelector('.ai-img-badge').textContent = (isFire ? '🔥 LỬA' : (isSmoke ? '💨 KHÓI' : d.object_type)) + ' · ' + pct + '%';
+          card.querySelector('.ai-title strong').textContent = (isFire ? 'Lửa (fire)' : (isSmoke ? 'Khói (smoke)' : d.object_type));
+          card.querySelector('.ai-sub').textContent = (d.camera_name || ('CAM #' + d.camera_id)) + ' (ID #' + d.camera_id + ') · ' + new Date(d.timestamp).toLocaleString('vi-VN');
+          card.addEventListener('click', function () { openDetectionDetailModal(d.id); });
           aiGrid.appendChild(card);
+        });
+      }
+    }
+
+    if (aiTableBody) {
+      aiTableBody.replaceChildren();
+      if (!filtered.length) {
+        aiTableBody.appendChild(emptyRow(8, detItems.length ? 'Không có sự kiện Lửa/Khói khớp bộ lọc.' : 'Chưa có sự kiện AI nào được ghi nhận.'));
+      } else {
+        filtered.forEach(function (d) {
+          var pct = ((d.confidence || 0) * 100).toFixed(1);
+          var evLower = String(d.event_type || '').toLowerCase();
+          var isFire = evLower === 'fire' || evLower === 'flame';
+          var isSmoke = evLower === 'smoke';
+          var badgeCls = (isFire || (isSmoke && (d.confidence || 0) >= 0.85)) ? 'critical' : (isSmoke ? 'warning' : 'info');
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td><span class="cam-id-badge">#' + d.id + '</span></td>' +
+            '<td><div class="ai-thumb-box"></div></td>' +
+            '<td><strong></strong><small style="display:block;color:var(--ss-muted);font-family:var(--ss-font-mono);font-size:11px"></small></td>' +
+            '<td><strong></strong></td>' +
+            '<td><span class="status ' + badgeCls + '">' + String(d.event_type || 'other').toUpperCase() + '</span></td>' +
+            '<td style="font-family:var(--ss-font-mono);font-weight:700">' + pct + '%</td>' +
+            '<td style="font-family:var(--ss-font-mono);font-size:11.5px"></td>' +
+            '<td><div class="table-actions"><button class="btn subtle">Chi tiết</button></div></td>';
+          var tds = tr.querySelectorAll('td');
+          attachSnapshotElement(tds[1].querySelector('.ai-thumb-box'), d.image_path, 'Snapshot #' + d.id, true);
+          tds[2].querySelector('strong').textContent = d.camera_name || ('Camera #' + d.camera_id);
+          tds[2].querySelector('small').textContent = 'camera_id: #' + d.camera_id;
+          tds[3].querySelector('strong').textContent = isFire ? 'Lửa (fire)' : (isSmoke ? 'Khói (smoke)' : d.object_type);
+          tds[6].textContent = d.timestamp ? new Date(d.timestamp).toLocaleString('vi-VN') : '—';
+          tds[7].querySelector('button').addEventListener('click', function () {
+            openDetectionDetailModal(d.id);
+          });
+          aiTableBody.appendChild(tr);
         });
       }
     }
@@ -778,35 +1130,35 @@
       if (note) note.textContent = activeDev ? (activeDev.device_name + ' (' + activeDev.device_code + ') · Đang ngoại tuyến') : 'Tạm thời chưa hoạt động (Chưa có thiết bị kết nối)';
       if (badge) { badge.className = 'status unknown'; badge.innerHTML = '<span class="dot offline"></span>Tạm thời chưa hoạt động'; }
       if (pirVal) { pirVal.textContent = '(—)'; pirVal.style.color = '#64748b'; }
-      if (pirDesc) pirDesc.textContent = 'Chưa có tín hiệu từ cảm biến PIR';
+      if (pirDesc) pirDesc.textContent = 'Chưa có tín hiệu từ cảm biến Lửa (Flame IR)';
       if (pirStatus) { pirStatus.className = 'status unknown'; pirStatus.innerHTML = '<span class="dot offline"></span>Tạm thời chưa hoạt động'; }
       if (mq2Val) { mq2Val.innerHTML = '(— <small>ppm</small>)'; mq2Val.style.color = '#64748b'; }
       if (mq2Bar && mq2Bar.parentElement) { mq2Bar.parentElement.style.display = 'none'; }
       if (mq2Status) { mq2Status.className = 'status unknown'; mq2Status.innerHTML = '<span class="dot offline"></span>Tạm thời chưa hoạt động'; }
       if (lockVal) { lockVal.textContent = '(—)'; lockVal.style.color = '#64748b'; }
-      if (relayDesc) relayDesc.textContent = 'Chưa kết nối mạch chấp hành';
+      if (relayDesc) relayDesc.textContent = 'Chưa kết nối Mạch Relay / Còi 12V / Khóa từ Solenoid';
       if (actStatus) { actStatus.className = 'status unknown'; actStatus.innerHTML = '<span class="dot offline"></span>Tạm thời chưa hoạt động'; }
       if (cmdTarget) { cmdTarget.className = 'status unknown'; cmdTarget.innerHTML = '<span class="dot offline"></span>Tạm thời chưa hoạt động'; }
       if (toggleRelay) { toggleRelay.classList.remove('on'); toggleRelay.disabled = true; toggleRelay.style.opacity = '0.45'; }
       if (toggleBuzzer) { toggleBuzzer.classList.remove('on'); toggleBuzzer.disabled = true; toggleBuzzer.style.opacity = '0.45'; }
       if (btnLock) { btnLock.disabled = true; btnLock.style.opacity = '0.45'; }
-      if (relayText) relayText.textContent = 'Tạm thời chưa hoạt động (Chờ thiết bị kết nối)';
-      if (buzzerText) buzzerText.textContent = 'Tạm thời chưa hoạt động (Chờ thiết bị kết nối)';
-      if (lockText) lockText.textContent = 'Tạm thời chưa hoạt động (Chờ thiết bị kết nối)';
+      if (relayText) relayText.textContent = 'Tạm thời chưa hoạt động (Chờ mạch ESP32 kết nối)';
+      if (buzzerText) buzzerText.textContent = 'Tạm thời chưa hoạt động (Chờ mạch ESP32 kết nối)';
+      if (lockText) lockText.textContent = 'Tạm thời chưa hoạt động (Chờ mạch ESP32 kết nối)';
     } else {
       if (note) note.textContent = activeDev.device_name + ' (' + activeDev.device_code + ') · Đang kết nối trực tuyến';
       if (badge) { badge.className = 'status online'; badge.innerHTML = '<span class="dot"></span>Đang hoạt động'; }
       if (cmdTarget) { cmdTarget.className = 'status online'; cmdTarget.innerHTML = '<span class="dot"></span>' + activeDev.device_code + ' · Đang hoạt động'; }
 
-      var pirDetected = Boolean(activeDev.latest_pir);
+      var flameDetected = Boolean(activeDev.latest_pir);
       if (pirVal) {
-        pirVal.textContent = pirDetected ? 'Phát hiện chuyển động!' : 'Bình thường';
-        pirVal.style.color = pirDetected ? '#dc2626' : '#10b981';
+        pirVal.textContent = flameDetected ? 'PHÁT HIỆN TIA LỬA!' : 'An toàn';
+        pirVal.style.color = flameDetected ? '#dc2626' : '#10b981';
       }
-      if (pirDesc) pirDesc.textContent = pirDetected ? 'Có người/vật thể trong vùng quét PIR' : 'Không phát hiện chuyển động bất thường';
+      if (pirDesc) pirDesc.textContent = flameDetected ? 'Cảm biến Flame IR phát hiện bức xạ lửa tại chỗ!' : 'Không phát hiện tia lửa bất thường (GPIO 27)';
       if (pirStatus) {
-        pirStatus.className = 'status ' + (pirDetected ? 'critical' : 'online');
-        pirStatus.innerHTML = pirDetected ? '<span class="dot red"></span>Cảnh báo' : '<span class="dot"></span>Đang hoạt động';
+        pirStatus.className = 'status ' + (flameDetected ? 'critical' : 'online');
+        pirStatus.innerHTML = flameDetected ? '<span class="dot red"></span>BÁO CHÁY' : '<span class="dot"></span>Đang hoạt động';
       }
 
       var mq2 = activeDev.latest_mq2 != null ? Number(activeDev.latest_mq2) : 0;
@@ -831,39 +1183,39 @@
       var relayOn = Boolean(activeDev.relay);
       var buzzerOn = Boolean(activeDev.buzzer);
       if (lockVal) {
-        lockVal.textContent = locked ? 'Đang khóa' : 'Đã mở';
-        lockVal.style.color = locked ? '#10b981' : '#f59e0b';
+        lockVal.textContent = locked ? 'Đang khóa' : 'Đã mở thoát hiểm';
+        lockVal.style.color = locked ? '#10b981' : '#dc2626';
       }
-      if (relayDesc) relayDesc.textContent = 'Relay: ' + (relayOn ? 'Bật' : 'Tắt') + ' · Còi: ' + (buzzerOn ? 'Bật' : 'Tắt');
+      if (relayDesc) relayDesc.textContent = 'Relay Bơm: ' + (relayOn ? 'Bật' : 'Tắt') + ' · Còi 12V: ' + (buzzerOn ? 'Bật' : 'Tắt');
       if (actStatus) { actStatus.className = 'status online'; actStatus.innerHTML = '<span class="dot"></span>Đang hoạt động'; }
 
       if (toggleRelay) { toggleRelay.classList.toggle('on', relayOn); toggleRelay.disabled = false; toggleRelay.style.opacity = '1'; }
       if (toggleBuzzer) { toggleBuzzer.classList.toggle('on', buzzerOn); toggleBuzzer.disabled = false; toggleBuzzer.style.opacity = '1'; }
-      if (btnLock) { btnLock.disabled = false; btnLock.style.opacity = '1'; btnLock.textContent = locked ? 'Mở khóa' : 'Khóa cửa'; }
-      if (relayText) relayText.textContent = 'Trạng thái thực tế: ' + (relayOn ? 'Đang BẬT' : 'Đang TẮT');
-      if (buzzerText) buzzerText.textContent = 'Trạng thái thực tế: ' + (buzzerOn ? 'Đang BẬT' : 'Đang TẮT');
-      if (lockText) lockText.textContent = 'Trạng thái thực tế: ' + (locked ? 'Đang KHÓA' : 'Đang MỞ');
+      if (btnLock) { btnLock.disabled = false; btnLock.style.opacity = '1'; btnLock.textContent = locked ? 'Mở thoát hiểm' : 'Khóa Solenoid'; }
+      if (relayText) relayText.textContent = 'Bơm chữa cháy / Phun sương: ' + (relayOn ? 'Đang KÍCH HOẠT' : 'Đang TẮT');
+      if (buzzerText) buzzerText.textContent = 'Còi báo động 12V: ' + (buzzerOn ? 'Đang HÚ CÒI' : 'Đang TẮT');
+      if (lockText) lockText.textContent = 'Khóa từ Solenoid thoát hiểm: ' + (locked ? 'Đang KHÓA' : 'ĐÃ NHẢ MỞ CỬA THOÁT HIỂM');
     }
 
     var iotBody = document.querySelector('[data-page="iot"] .table tbody');
     if (iotBody) {
       iotBody.replaceChildren();
       if (!devItems.length) {
-        iotBody.appendChild(emptyRow(7, 'Chưa có thiết bị IoT nào được đăng ký.'));
+        iotBody.appendChild(emptyRow(7, 'Chưa có thiết bị ESP32 PCCC nào được đăng ký.'));
       } else {
         devItems.forEach(function (d) {
           var tr = document.createElement('tr');
           var isOnline = d.status === 'ONLINE';
           tr.innerHTML =
             '<td><strong style="font-family:var(--ss-font-mono)"></strong></td><td></td><td></td>' +
-            '<td><span class="status ' + (isOnline ? 'online' : 'offline') + '"><span class="dot ' + (isOnline ? '' : 'red') + '"></span>' + d.status + '</span></td>' +
+            '<td><span class="status ' + (isOnline ? 'online' : 'unknown') + '"><span class="dot ' + (isOnline ? '' : 'offline') + '"></span>' + d.status + '</span></td>' +
             '<td style="font-family:var(--ss-font-mono);font-size:12px"></td><td style="font-family:var(--ss-font-mono);font-size:11.5px"></td><td><div class="table-actions"></div></td>';
           var tds = tr.querySelectorAll('td');
           var actionsWrap = tds[6].querySelector('.table-actions');
           tds[0].querySelector('strong').textContent = d.device_code;
           tds[1].textContent = d.device_name;
           tds[2].textContent = d.device_type;
-          tds[4].textContent = 'PIR: ' + (d.latest_pir ? 'Có' : 'Không') + ' · MQ-2: ' + (d.latest_mq2 != null ? d.latest_mq2 + ' ppm' : '—');
+          tds[4].textContent = 'Flame: ' + (d.latest_pir ? 'Có lửa!' : 'An toàn') + ' · MQ-2: ' + (d.latest_mq2 != null ? d.latest_mq2 + ' ppm' : '—');
           tds[5].textContent = d.last_seen ? new Date(d.last_seen).toLocaleString('vi-VN') : 'Chưa kết nối';
 
           var selBtn = document.createElement('button');
@@ -1197,16 +1549,29 @@
   /* ==================== MODALS (CAMERA, USER, DEVICE, AI SIM, SENSOR SIM) ==================== */
   function openCameraFormModal(existingCam) {
     var isEdit = Boolean(existingCam);
+    var camId = isEdit ? (existingCam.camera_id != null ? existingCam.camera_id : existingCam.id) : null;
     var backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
     backdrop.innerHTML =
       '<div class="modal" role="dialog" aria-modal="true">' +
-      '<div class="modal-head">' + (isEdit ? 'Cập nhật Camera' : 'Thông tin Camera mới') + '<button class="modal-close" aria-label="Đóng">×</button></div>' +
+      '<div class="modal-head"><span>' +
+        (isEdit
+          ? ('Cập nhật Camera <span class="cam-id-badge" style="margin-left:8px">camera_id #' + camId + '</span>')
+          : 'Thông tin Camera mới') +
+      '</span><button class="modal-close" aria-label="Đóng">×</button></div>' +
       '<div class="modal-grid">' +
-      '<div class="modal-field"><label for="ss-field-0">Tên Camera *</label><input id="ss-field-0" type="text" placeholder="Nhập tên camera (vd: CAM-01 · Cổng chính)"></div>' +
-      '<div class="modal-field"><label for="ss-field-1">Địa chỉ IP</label><input id="ss-field-1" type="text" placeholder="Nhập địa chỉ IP (vd: 192.168.1.21)"></div>' +
-      '<div class="modal-field"><label for="ss-field-2">RTSP URL *</label><input id="ss-field-2" type="text" placeholder="rtsp://192.168.1.21:554/stream1"></div>' +
-      '<div class="modal-field"><label for="ss-field-3">Khu vực lắp đặt</label><input id="ss-field-3" type="text" placeholder="Nhập khu vực lắp đặt (vd: Cổng chính)"></div>' +
+      '<div class="modal-field"><label for="ss-field-0">Tên Camera *</label><input id="ss-field-0" type="text" placeholder="Nhập tên camera (vd: CAM-01 · Nhà kho Hóa chất)"></div>' +
+      '<div class="modal-field"><label for="ss-field-1">Địa chỉ IP</label><input id="ss-field-1" type="text" placeholder="Nhập địa chỉ IP (vd: 192.168.10.21)"></div>' +
+      '<div class="modal-field full"><label for="ss-field-2">' +
+        (isEdit ? 'RTSP URL mới (để trống để giữ nguyên URL gốc)' : 'RTSP URL *') +
+      '</label><input id="ss-field-2" type="text" placeholder="' +
+        (isEdit ? 'Để trống nếu muốn giữ nguyên RTSP URL gốc đã lưu...' : 'rtsp://user:pass@192.168.10.21:554/stream1') +
+      '">' +
+      (isEdit
+        ? '<div class="rtsp-hint-box"><strong>Bảo toàn RTSP URL:</strong> Hệ thống đã che mật khẩu trên giao diện (<code data-cur-rtsp></code>). Hãy <b>để trống ô trên</b> nếu bạn chỉ sửa tên/vị trí/trạng thái — Backend sẽ giữ nguyên RTSP URL gốc kèm tài khoản/mật khẩu.</div>'
+        : '<div class="rtsp-hint-box">Chỉ chấp nhận giao thức <code>rtsp://</code> hoặc <code>rtsps://</code> (hoặc luồng MediaMTX <code>rtsp://mediamtx:8554/...</code>). Mật khẩu được che tự động trên giao diện và chỉ cấp nội bộ cho AI Service.</div>') +
+      '</div>' +
+      '<div class="modal-field"><label for="ss-field-3">Khu vực lắp đặt PCCC</label><input id="ss-field-3" type="text" placeholder="Nhập khu vực (vd: Nhà kho Khu A / Tầng hầm B1)"></div>' +
       '<div class="modal-field"><label for="ss-field-4">Trạng thái</label><select id="ss-field-4" class="select" style="width:100%"><option value="OFFLINE">OFFLINE (Tạm thời chưa hoạt động)</option><option value="ONLINE">ONLINE (Trực tuyến)</option></select></div>' +
       '</div>' +
       '<div class="modal-foot"><button class="btn" data-cancel>Hủy</button><button class="btn primary" data-save>Lưu thông tin</button></div>' +
@@ -1214,9 +1579,12 @@
     if (isEdit) {
       backdrop.querySelector('#ss-field-0').value = existingCam.name || '';
       backdrop.querySelector('#ss-field-1').value = existingCam.ip_address || '';
-      backdrop.querySelector('#ss-field-2').value = existingCam.rtsp_url || '';
+      // Giữ trống ô RTSP khi sửa để không ghi đè bản URL đã che mật khẩu lên URL gốc trong DB
+      backdrop.querySelector('#ss-field-2').value = '';
       backdrop.querySelector('#ss-field-3').value = existingCam.location || '';
-      backdrop.querySelector('#ss-field-4').value = existingCam.status === 'OFFLINE' ? 'OFFLINE' : 'ONLINE';
+      backdrop.querySelector('#ss-field-4').value = existingCam.status === 'ONLINE' ? 'ONLINE' : 'OFFLINE';
+      var curRtspEl = backdrop.querySelector('[data-cur-rtsp]');
+      if (curRtspEl) curRtspEl.textContent = existingCam.rtsp_url || 'chưa có';
     }
     document.getElementById('ss-modal-root').appendChild(backdrop);
     function close() { backdrop.remove(); }
@@ -1224,22 +1592,35 @@
     backdrop.querySelector('[data-cancel]').addEventListener('click', close);
     backdrop.addEventListener('click', function (e) { if (e.target === backdrop) close(); });
     backdrop.querySelector('[data-save]').addEventListener('click', function () {
+      var rtspVal = backdrop.querySelector('#ss-field-2').value.trim();
       var payload = {
         name: backdrop.querySelector('#ss-field-0').value.trim(),
         ip_address: backdrop.querySelector('#ss-field-1').value.trim() || null,
-        rtsp_url: backdrop.querySelector('#ss-field-2').value.trim(),
+        rtsp_url: isEdit ? (rtspVal || null) : rtspVal,
         location: backdrop.querySelector('#ss-field-3').value.trim() || null,
         status: backdrop.querySelector('#ss-field-4').value
       };
-      if (!payload.name || (!isEdit && !payload.rtsp_url)) {
+      if (!payload.name || (!isEdit && !rtspVal)) {
         toast('Vui lòng nhập Tên Camera và RTSP URL.');
         return;
       }
+      if (rtspVal && !/^rtsps?:\/\/.+/i.test(rtspVal)) {
+        toast('RTSP URL phải bắt đầu bằng rtsp:// hoặc rtsps://');
+        return;
+      }
       var method = isEdit ? 'PUT' : 'POST';
-      var path = isEdit ? ('/cameras/' + existingCam.id) : '/cameras';
-      request(path, { method: method, body: JSON.stringify(payload) }).then(function () {
+      var path = isEdit ? ('/cameras/' + camId) : '/cameras';
+      request(path, { method: method, body: JSON.stringify(payload) }).then(function (saved) {
         close();
-        toast(isEdit ? 'Đã cập nhật thông tin camera.' : 'Đã thêm camera mới vào cơ sở dữ liệu.');
+        state.monitorCameras = null;
+        state.mgmtCameras = null;
+        if (isEdit) {
+          toast(saved && saved.rtsp_url_changed
+            ? ('Đã cập nhật camera #' + camId + ' cùng RTSP URL mới.')
+            : ('Đã cập nhật camera #' + camId + ' (giữ nguyên RTSP URL gốc).'));
+        } else {
+          toast('Đã thêm camera mới (camera_id #' + (saved && saved.id) + ').');
+        }
         refreshDataOnly();
       }).catch(function (err) {
         toast(err.detail || 'Không thể lưu camera.');
@@ -1337,15 +1718,19 @@
     }
     var backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
-    var camOpts = state.cameras.map(function (c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
+    var camOpts = state.cameras.map(function (c) {
+      var cid = c.camera_id != null ? c.camera_id : c.id;
+      return '<option value="' + cid + '">#' + cid + ' · ' + c.name + '</option>';
+    }).join('');
     backdrop.innerHTML =
       '<div class="modal" role="dialog" aria-modal="true">' +
-      '<div class="modal-head">Gửi sự kiện nhận diện AI<button class="modal-close" aria-label="Đóng">×</button></div>' +
+      '<div class="modal-head">Gửi sự kiện nhận diện Lửa &amp; Khói (YOLOv8 PCCC)<button class="modal-close" aria-label="Đóng">×</button></div>' +
       '<div class="modal-grid">' +
-      '<div class="modal-field"><label for="ss-sim-cam">Chọn Camera</label><select id="ss-sim-cam" class="select" style="width:100%">' + camOpts + '</select></div>' +
-      '<div class="modal-field"><label for="ss-sim-obj">Đối tượng nhận diện (Object)</label><select id="ss-sim-obj" class="select" style="width:100%"><option value="person">person (Người)</option><option value="car">car (Xe ô tô)</option><option value="truck">truck (Xe tải)</option><option value="fire">fire (Lửa / Cháy)</option><option value="weapon">weapon (Vũ khí)</option></select></div>' +
-      '<div class="modal-field"><label for="ss-sim-evt">Loại sự kiện (Event Type)</label><select id="ss-sim-evt" class="select" style="width:100%"><option value="intrusion">intrusion (Xâm nhập -> Cảnh báo CRITICAL)</option><option value="person">person (Phát hiện người -> Cảnh báo WARNING)</option><option value="fire">fire (Cháy nổ -> Cảnh báo CRITICAL)</option><option value="object">object (Thông thường)</option></select></div>' +
+      '<div class="modal-field"><label for="ss-sim-cam">Chọn Camera PCCC</label><select id="ss-sim-cam" class="select" style="width:100%">' + camOpts + '</select></div>' +
+      '<div class="modal-field"><label for="ss-sim-obj">Đối tượng YOLOv8 (Class)</label><select id="ss-sim-obj" class="select" style="width:100%"><option value="fire">fire (Lửa / Đám cháy)</option><option value="smoke">smoke (Khói)</option></select></div>' +
+      '<div class="modal-field"><label for="ss-sim-evt">Loại sự kiện PCCC</label><select id="ss-sim-evt" class="select" style="width:100%"><option value="fire">fire (Báo cháy khẩn cấp -> CRITICAL)</option><option value="smoke">smoke (Cảnh báo khói -> WARNING / CRITICAL)</option></select></div>' +
       '<div class="modal-field"><label for="ss-sim-conf">Độ tin cậy (0.10 – 0.99)</label><input id="ss-sim-conf" type="number" step="0.01" min="0.1" max="0.99" value="0.95"></div>' +
+      '<div class="modal-field full"><label for="ss-sim-file">Ảnh snapshot đính kèm (tùy chọn — JPEG/PNG/WebP)</label><input id="ss-sim-file" type="file" accept="image/jpeg,image/png,image/webp" style="padding-top:7px"></div>' +
       '</div>' +
       '<div class="modal-foot"><button class="btn" data-cancel>Hủy</button><button class="btn primary" data-save>Gửi sự kiện</button></div>' +
       '</div>';
@@ -1359,11 +1744,33 @@
       var obj = backdrop.querySelector('#ss-sim-obj').value;
       var evt = backdrop.querySelector('#ss-sim-evt').value;
       var conf = parseFloat(backdrop.querySelector('#ss-sim-conf').value) || 0.92;
-      request('/detections', {
-        method: 'POST',
-        body: JSON.stringify({ camera_id: camId, object_type: obj, event_type: evt, confidence: conf, image_path: 'uploads/events/sim.jpg' })
+      var fileInput = backdrop.querySelector('#ss-sim-file');
+      var file = fileInput && fileInput.files && fileInput.files[0];
+
+      var uploadPromise = Promise.resolve(null);
+      if (file) {
+        var fd = new FormData();
+        fd.append('camera_id', String(camId));
+        fd.append('file', file);
+        uploadPromise = requestMultipart('/detections/snapshot', fd).then(function (up) {
+          return up && up.image_path ? up.image_path : null;
+        });
+      }
+
+      uploadPromise.then(function (imagePath) {
+        return request('/detections', {
+          method: 'POST',
+          body: JSON.stringify({
+            camera_id: camId,
+            object_type: obj,
+            event_type: evt,
+            confidence: conf,
+            image_path: imagePath
+          })
+        });
       }).then(function (res) {
         close();
+        state.filteredDetections = null;
         toast(res.alert_id ? ('Đã ghi nhận AI & tạo Cảnh báo ' + res.alert_severity + '!') : 'Đã ghi nhận sự kiện AI.');
         refreshDataOnly();
       }).catch(function (err) {
@@ -1384,8 +1791,8 @@
       '<div class="modal" role="dialog" aria-modal="true">' +
       '<div class="modal-head">Cập nhật cảm biến (' + active.device_code + ')<button class="modal-close" aria-label="Đóng">×</button></div>' +
       '<div class="modal-grid">' +
-      '<div class="modal-field"><label for="ss-sen-pir">Cảm biến chuyển động PIR</label><select id="ss-sen-pir" class="select" style="width:100%"><option value="false">Không có chuyển động (Bình thường)</option><option value="true">Phát hiện chuyển động (PIR = TRUE)</option></select></div>' +
-      '<div class="modal-field"><label for="ss-sen-mq2">Nồng độ khí gas MQ-2 (ppm)</label><input id="ss-sen-mq2" type="number" min="0" max="10000" value="' + (active.latest_mq2 != null ? active.latest_mq2 : 350) + '"></div>' +
+      '<div class="modal-field"><label for="ss-sen-pir">Cảm biến Lửa (Flame IR · GPIO 27)</label><select id="ss-sen-pir" class="select" style="width:100%"><option value="false">An toàn (Không có tia lửa)</option><option value="true">PHÁT HIỆN TIA LỬA (Flame = TRUE)</option></select></div>' +
+      '<div class="modal-field"><label for="ss-sen-mq2">Nồng độ khói / khí gas MQ-2 (ppm)</label><input id="ss-sen-mq2" type="number" min="0" max="10000" value="' + (active.latest_mq2 != null ? active.latest_mq2 : 340) + '"></div>' +
       '</div>' +
       '<div class="modal-foot"><button class="btn" data-cancel>Hủy</button><button class="btn primary" data-save>Cập nhật</button></div>' +
       '</div>';
@@ -1474,31 +1881,50 @@
       });
     }
 
-    // Monitor & Cameras filters
-    ['[data-camera-search]', '[data-camera-region]', '[data-camera-status]', '#ss-cam-mgmt-search', '#ss-cam-mgmt-status'].forEach(function (sel) {
+    // Monitor & Cameras filters (gọi API GET /api/cameras?search=&location=&status= có debounce)
+    function scheduleCameraFilter(scope) {
+      clearTimeout(camFilterTimer);
+      camFilterTimer = setTimeout(function () {
+        fetchFilteredCameras(scope);
+      }, 220);
+    }
+    ['[data-camera-search]', '[data-camera-region]', '[data-camera-status]'].forEach(function (sel) {
       var el = document.querySelector(sel);
       if (el) {
-        el.addEventListener('input', renderCamerasViews);
-        el.addEventListener('change', renderCamerasViews);
+        el.addEventListener('input', function () { scheduleCameraFilter('monitor'); });
+        el.addEventListener('change', function () { fetchFilteredCameras('monitor'); });
+      }
+    });
+    ['#ss-cam-mgmt-search', '#ss-cam-mgmt-location', '#ss-cam-mgmt-status'].forEach(function (sel) {
+      var el = document.querySelector(sel);
+      if (el) {
+        el.addEventListener('input', function () { scheduleCameraFilter('mgmt'); });
+        el.addEventListener('change', function () { fetchFilteredCameras('mgmt'); });
       }
     });
 
-    // AI filters
+    // AI filters (gọi API GET /api/detections?camera_id=&object_type=&event_type=&min_confidence=)
     document.querySelectorAll('#ss-ai-filters .filter-chip').forEach(function (chip) {
       chip.addEventListener('click', function () {
         document.querySelectorAll('#ss-ai-filters .filter-chip').forEach(function (c) { c.classList.remove('active'); });
         chip.classList.add('active');
         state.aiChipFilter = chip.dataset.aiFilter || 'all';
-        renderAiView();
+        fetchFilteredDetections();
       });
     });
-    ['#ss-ai-event-filter', '#ss-ai-search'].forEach(function (sel) {
+    ['#ss-ai-camera-filter', '#ss-ai-event-filter', '#ss-ai-conf-filter'].forEach(function (sel) {
       var el = document.querySelector(sel);
       if (el) {
-        el.addEventListener('input', renderAiView);
-        el.addEventListener('change', renderAiView);
+        el.addEventListener('change', fetchFilteredDetections);
       }
     });
+    var aiSearch = document.getElementById('ss-ai-search');
+    if (aiSearch) {
+      aiSearch.addEventListener('input', function () {
+        clearTimeout(aiFilterTimer);
+        aiFilterTimer = setTimeout(renderAiView, 120);
+      });
+    }
 
     // IoT controls
     var devSelect = document.getElementById('ss-iot-device-select');
@@ -1533,7 +1959,7 @@
       toggleRelay.addEventListener('click', function () {
         var active = getActiveDevice();
         var nextAction = (active && active.relay) ? 'relay_off' : 'relay_on';
-        sendDeviceCommand(nextAction, nextAction === 'relay_on' ? 'BẬT Relay đèn khu vực' : 'TẮT Relay đèn khu vực');
+        sendDeviceCommand(nextAction, nextAction === 'relay_on' ? 'KÍCH HOẠT Mạch Relay bơm chữa cháy / phun sương' : 'NGẮT Mạch Relay bơm chữa cháy');
       });
     }
 
@@ -1542,7 +1968,7 @@
       toggleBuzzer.addEventListener('click', function () {
         var active = getActiveDevice();
         var nextAction = (active && active.buzzer) ? 'buzzer_off' : 'buzzer_on';
-        sendDeviceCommand(nextAction, nextAction === 'buzzer_on' ? 'BẬT Còi báo động' : 'TẮT Còi báo động');
+        sendDeviceCommand(nextAction, nextAction === 'buzzer_on' ? 'BẬT Còi báo động 12V' : 'TẮT Còi báo động 12V');
       });
     }
 
@@ -1552,7 +1978,7 @@
         var active = getActiveDevice();
         var isLocked = !active || active.lock_engaged !== false;
         var nextAction = isLocked ? 'unlock' : 'lock';
-        sendDeviceCommand(nextAction, isLocked ? 'MỞ KHÓA cửa chính' : 'KHÓA cửa chính');
+        sendDeviceCommand(nextAction, isLocked ? 'NHẢ Khóa từ Solenoid mở cửa thoát hiểm khẩn cấp' : 'KHÓA LẠI Khóa từ Solenoid cửa thoát hiểm');
       });
     }
 
@@ -1683,10 +2109,54 @@
 
   function connectWebSocket() {
     if (!window.WebSocket || !token || activeSocket) return;
+    if (wsReconnectTimer) {
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
     var socketUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/dashboard?token=' + encodeURIComponent(token);
     activeSocket = new WebSocket(socketUrl);
-    activeSocket.onmessage = function () { refreshDataOnly(); };
-    activeSocket.onclose = function () { activeSocket = null; };
+    activeSocket.onopen = function () {
+      var rtNote = document.getElementById('ss-ai-realtime-note');
+      if (rtNote) rtNote.textContent = 'WebSocket Realtime: Đã kết nối (detection.created)';
+    };
+    activeSocket.onmessage = function (ev) {
+      try {
+        var msg = JSON.parse(ev.data);
+        if (msg && msg.type === 'detection.created' && msg.data) {
+          var d = msg.data;
+          var pct = d.confidence != null ? (Number(d.confidence) * 100).toFixed(1) + '%' : '';
+          var camLabel = d.camera_name || ('Camera #' + d.camera_id);
+          toast('AI phát hiện ' + d.object_type + (pct ? ' (' + pct + ')' : '') + ' tại ' + camLabel);
+          // Đưa sự kiện mới lên đầu danh sách ngay lập tức trước khi đồng bộ đầy đủ
+          var exists = state.detections.some(function (x) { return x.id === d.id; });
+          if (!exists && d.id != null) {
+            state.detections.unshift({
+              id: d.id,
+              camera_id: d.camera_id,
+              camera_name: d.camera_name || camLabel,
+              object_type: d.object_type,
+              confidence: d.confidence,
+              event_type: d.event_type,
+              image_path: d.image_path || null,
+              timestamp: d.timestamp || new Date().toISOString()
+            });
+            state.filteredDetections = null;
+            renderAiView();
+          }
+          var rtNote = document.getElementById('ss-ai-realtime-note');
+          if (rtNote) rtNote.textContent = 'Nhận detection.created #' + d.id + ' lúc ' + new Date().toLocaleTimeString('vi-VN');
+        }
+      } catch (e) { /* ignore non-JSON frames */ }
+      refreshDataOnly();
+    };
+    activeSocket.onclose = function () {
+      activeSocket = null;
+      var rtNote = document.getElementById('ss-ai-realtime-note');
+      if (rtNote) rtNote.textContent = 'WebSocket: Đang kết nối lại...';
+      if (token) {
+        wsReconnectTimer = setTimeout(connectWebSocket, 3000);
+      }
+    };
   }
 
   function refreshDataOnly() {
@@ -1703,7 +2173,10 @@
       request('/devices'),
       request('/logs/system?limit=100'),
       request('/detections?limit=100'),
-      request('/users'),
+      request('/users').catch(function (err) {
+        if (err && err.status === 403) return { items: [] };
+        throw err;
+      }),
       request('/system/health'),
       request('/system/settings')
     ]).then(function (results) {
@@ -1712,9 +2185,13 @@
       state.alerts = (results[2] && results[2].items) || [];
       state.detStats = (results[3] && results[3].items) || [];
       state.cameras = (results[4] && results[4].items) || [];
+      state.cameraLocations = (results[4] && Array.isArray(results[4].locations)) ? results[4].locations : [];
+      state.monitorCameras = null;
+      state.mgmtCameras = null;
       state.devices = (results[5] && results[5].items) || [];
       state.logs = (results[6] && results[6].items) || [];
       state.detections = (results[7] && results[7].items) || [];
+      state.filteredDetections = null;
       state.users = (results[8] && results[8].items) || [];
       state.health = results[9] || {};
       state.settings = results[10] || {};

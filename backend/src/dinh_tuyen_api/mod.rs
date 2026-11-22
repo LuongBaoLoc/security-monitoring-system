@@ -52,6 +52,34 @@ pub struct DaysQuery {
     pub days: i64,
 }
 
+/// Bộ lọc `GET /api/cameras?search=&location=&status=&limit=&offset=`.
+#[derive(Debug, Deserialize)]
+pub struct CameraListQuery {
+    /// Tìm theo tên, khu vực hoặc địa chỉ IP (không tìm trong RTSP URL để tránh dò mật khẩu).
+    pub search: Option<String>,
+    /// Lọc đúng khu vực lắp đặt (không phân biệt hoa/thường).
+    pub location: Option<String>,
+    /// `ONLINE` | `OFFLINE` (bỏ trống hoặc `all` = tất cả).
+    pub status: Option<String>,
+    #[serde(default = "default_limit_50")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+/// Bộ lọc `GET /api/detections?camera_id=&object_type=&event_type=&min_confidence=&limit=&offset=`.
+#[derive(Debug, Deserialize)]
+pub struct DetectionsQuery {
+    pub camera_id: Option<i64>,
+    pub object_type: Option<String>,
+    pub event_type: Option<String>,
+    pub min_confidence: Option<f64>,
+    #[serde(default = "default_limit_50")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
 fn default_limit_50() -> i64 {
     50
 }
@@ -121,6 +149,11 @@ pub fn api_router() -> Router<AppState> {
             "/detections",
             get(su_kien_ai::list_detections).post(su_kien_ai::create_detection),
         )
+        .route(
+            "/detections/snapshot",
+            post(su_kien_ai::upload_detection_snapshot)
+                .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024)),
+        )
         .route("/detections/:event_id", get(su_kien_ai::detection_detail))
         // Alerts
         .route("/alerts", get(canh_bao_an_ninh::list_alerts))
@@ -155,4 +188,9 @@ pub fn api_router() -> Router<AppState> {
                 .put(he_thong_va_cai_dat::update_system_settings),
         )
         .route("/system/health", get(he_thong_va_cai_dat::system_health))
+        // Internal (chỉ dành cho AI Service, xác thực bằng AI_SERVICE_TOKEN)
+        .route(
+            "/internal/cameras/mappings",
+            get(quan_ly_camera::internal_camera_mappings),
+        )
 }

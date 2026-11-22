@@ -4,11 +4,11 @@
   if (!root) return;
 
   var pageNames = {
-    overview: 'Tổng quan',
+    overview: 'Tổng quan PCCC',
     monitor: 'Giám sát Camera',
-    ai: 'Giám sát AI',
-    iot: 'Thiết bị IoT',
-    alerts: 'Cảnh báo an ninh',
+    ai: 'Giám sát AI Lửa & Khói',
+    iot: 'Thiết bị IoT PCCC',
+    alerts: 'Cảnh báo PCCC',
     history: 'Lịch sử sự kiện',
     cameras: 'Quản lý Camera',
     users: 'Quản lý người dùng',

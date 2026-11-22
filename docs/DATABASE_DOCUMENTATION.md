@@ -1,4 +1,8 @@
-# Thiết kế Cơ sở Dữ liệu — PostgreSQL (Tuần 2 & Tuần 4)
+# Thiết kế Cơ sở Dữ liệu PostgreSQL — Hệ thống PCCC (Tuần 2 & Tuần 4)
+
+Cơ sở dữ liệu **PostgreSQL 16** (tương thích SQLite khi chạy thử cục bộ) được quản lý bởi tầng `backend/src/co_so_du_lieu/` (`SQLx`), lưu trữ toàn bộ dữ liệu giám sát cháy/khói, thiết bị IoT ESP32 và nhật ký kiểm toán, đồng thời cung cấp trực tiếp nguồn dữ liệu thời gian thực cho **Dashboard Grafana** (khi bật profile `monitoring`).
+
+---
 
 ## 1. Sơ đồ Quan hệ Thực thể (ERD)
 
@@ -24,7 +28,7 @@ erDiagram
     CAMERAS {
         bigint id PK
         varchar name
-        inet ip_address
+        varchar ip_address
         text rtsp_url
         varchar location
         varchar status "ONLINE | OFFLINE | UNKNOWN"
@@ -35,7 +39,7 @@ erDiagram
 
     DEVICES {
         bigint id PK
-        varchar device_code UK "Khớp topic MQTT"
+        varchar device_code UK
         varchar device_name
         varchar device_type "ESP32"
         varchar status "ONLINE | OFFLINE | UNKNOWN"
@@ -51,7 +55,7 @@ erDiagram
     SENSORS {
         bigint id PK
         bigint device_id FK
-        varchar sensor_type "pir | mq2 | relay | buzzer | lock"
+        varchar sensor_type "mq2 | flame_pir | relay | buzzer | lock"
         jsonb sensor_value
         timestamptz created_at
     }
@@ -59,22 +63,22 @@ erDiagram
     DETECTION_EVENTS {
         bigint id PK
         bigint camera_id FK
-        varchar object_type
+        varchar object_type "fire | smoke"
         real confidence "0.0 -> 1.0"
-        varchar event_type
-        text image_path
+        varchar event_type "fire | smoke"
+        text image_path "uploads/events/..."
         timestamptz event_timestamp
         timestamptz created_at
     }
 
     ALERTS {
         bigint id PK
-        bigint detection_id FK "Nullable"
-        varchar alert_type
+        bigint detection_id FK
+        varchar alert_type "fire | smoke | gas_mq2 | camera_offline"
         varchar severity "INFO | WARNING | CRITICAL"
         text description
         varchar status "OPEN | RESOLVED | ARCHIVED"
-        bigint handled_by FK "Nullable -> users.id"
+        bigint handled_by FK
         timestamptz created_at
         timestamptz handled_at
     }
@@ -83,7 +87,7 @@ erDiagram
         bigint id PK
         bigint device_id FK
         uuid command_id UK
-        varchar command
+        varchar command "relay_on | buzzer_on | unlock ..."
         varchar result "PENDING | ACCEPTED | REJECTED | TIMEOUT | ERROR"
         jsonb detail
         timestamptz created_at
@@ -92,7 +96,7 @@ erDiagram
 
     SYSTEM_LOGS {
         bigint id PK
-        bigint user_id FK "Nullable -> users.id"
+        bigint user_id FK
         varchar action
         text description
         timestamptz created_at
@@ -101,21 +105,27 @@ erDiagram
 
 ---
 
-## 2. Chi tiết các Bảng và Ràng buộc Toàn vẹn (Tuần 4)
+## 2. Chi tiết 8 Bảng Dữ liệu và Ràng buộc Toàn vẹn (Tuần 4)
 
-1. **`users`**: Lưu tài khoản người dùng. `username` là duy nhất (`UNIQUE`); `password_hash` lưu chuỗi băm `bcrypt`; `role` giới hạn trong `('ADMIN', 'OPERATOR')`.
-2. **`cameras`**: Lưu thông tin kết nối camera IP. Không cho phép xóa camera nếu đã phát sinh lịch sử trong `detection_events` (`ON DELETE RESTRICT` & kiểm tra ở tầng API trả `409 Conflict`).
-3. **`devices`**: Lưu danh sách thiết bị IoT. `device_code` (`UNIQUE`) dùng làm định danh trong topic MQTT `security/device/{device_id}/...`. Các cột `latest_pir`, `latest_mq2`, `relay`, `buzzer`, `lock_engaged` được denormalize để truy vấn nhanh trạng thái hiện tại trên Dashboard.
-4. **`sensors`**: Lưu chuỗi thời gian (time-series) của từng loại cảm biến. Đánh chỉ mục kết hợp `(device_id, sensor_type, created_at DESC)`.
-5. **`detection_events`**: Lưu toàn bộ sự kiện do AI gửi về, ràng buộc `0 <= confidence <= 1`.
-6. **`alerts`**: Lưu cảnh báo an ninh (có thể gắn với `detection_id` hoặc cảnh báo thiết bị/hệ thống độc lập khi `detection_id IS NULL`). Lưu người xử lý (`handled_by`) và thời điểm xử lý (`handled_at`).
-7. **`device_logs`**: Lưu nhật ký điều khiển thiết bị IoT với `command_id` duy nhất để đối chiếu bản tin `ACK` từ ESP32.
-8. **`system_logs`**: Lưu nhật ký kiểm toán hệ thống (đăng nhập, thêm/sửa/xóa camera, xử lý cảnh báo, nhận sự kiện AI).
+1. **`users`**: Tài khoản quản trị và trực ban PCCC. `username` là duy nhất (`UNIQUE`); `password_hash` lưu chuỗi băm `bcrypt`; `role` giới hạn trong `('ADMIN', 'OPERATOR')`.
+2. **`cameras`**: Danh sách Camera IP RTSP / luồng MediaMTX lắp đặt tại các khu vực nguy cơ cháy (Nhà kho, Phân xưởng, Tầng hầm bãi xe, Phòng kỹ thuật điện). `rtsp_url` lưu địa chỉ gốc (chỉ cấp cho AI Service qua `/api/internal/cameras/mappings`, luôn che mật khẩu khi trả về Frontend).
+3. **`devices`**: Danh sách mạch **ESP32 PCCC**. `device_code` (`UNIQUE`) khớp với topic MQTT `security/device/{device_code}/...`. Các cột trạng thái mới nhất phục vụ hiển thị nhanh trên Dashboard:
+   - `latest_mq2`: Nồng độ khói / khí dễ cháy MQ-2 gần nhất (ppm, ràng buộc `>= 0`).
+   - `latest_pir`: Trạng thái cảm biến lửa hồng ngoại / tín hiệu số tại chỗ (GPIO 27).
+   - `relay`: Trạng thái **Mạch Relay kích hoạt** (bơm chữa cháy / phun sương, GPIO 26).
+   - `buzzer`: Trạng thái **Còi báo động 12V** (GPIO 25).
+   - `lock_engaged`: Trạng thái **Khóa từ Solenoid cửa thoát hiểm** (GPIO 33 — `TRUE`: đang khóa; `FALSE`: đã mở cửa thoát hiểm khẩn cấp).
+4. **`sensors`**: Chuỗi thời gian (time-series) lịch sử nồng độ khói/gas MQ-2 và trạng thái cơ cấu chấp hành, có chỉ mục `(device_id, sensor_type, created_at DESC)` tối ưu cho cả Dashboard và **Grafana**.
+5. **`detection_events`**: Toàn bộ sự kiện phát hiện **Lửa (`fire`)** và **Khói (`smoke`)** do YOLOv8 gửi về, ràng buộc `0 <= confidence <= 1`, kèm `image_path` trỏ đến ảnh snapshot thật trong `uploads/events/`.
+6. **`alerts`**: Cảnh báo PCCC phát sinh từ AI (`detection_id` liên kết tới `detection_events`), từ cảm biến MQ-2 vượt ngưỡng hoặc camera mất tín hiệu (`detection_id IS NULL`). Ghi nhận người xử lý (`handled_by`) và thời điểm xử lý (`handled_at`).
+7. **`device_logs`**: Nhật ký gửi lệnh điều khiển PCCC (`relay_on/off`, `buzzer_on/off`, `unlock/lock`) có `command_id` (UUID) duy nhất để đối chiếu phản hồi `ACK` từ ESP32.
+8. **`system_logs`**: Nhật ký kiểm toán hệ thống (đăng nhập, quản lý camera/người dùng, phát hiện cháy/khói, xử lý cảnh báo, điều khiển thiết bị).
 
 ---
 
-## 3. Khởi tạo Schema và Dữ liệu Mẫu (Tuần 4)
+## 3. Khởi tạo Schema & Dữ liệu Mẫu PCCC (Tuần 4)
 
-- **File SQL khởi tạo**: [`database/init.sql`](../database/init.sql) tạo đầy đủ 8 bảng và các B-tree index tối ưu truy vấn theo thời gian.
-- **File dữ liệu mẫu SQL**: [`database/seed.sql`](../database/seed.sql) cung cấp dữ liệu mẫu cho 4 camera, 3 thiết bị ESP32, lịch sử cảm biến, 5 sự kiện nhận diện AI, 4 cảnh báo, nhật ký điều khiển và nhật ký hệ thống.
-- **Tự động khởi tạo khi chạy Backend**: Khi `SEED_DEMO_DATA=true` (mặc định trong môi trường phát triển), hàm `seed_demo_data_if_empty()` trong [`backend/app/services/__init__.py`](../backend/app/services/__init__.py) tự động nạp bộ dữ liệu mẫu nếu CSDL đang trống, giúp nhóm review ngay giao diện Tổng quan với dữ liệu thật từ API.
+- **Schema SQL chuẩn PostgreSQL**: [`database/init.sql`](../database/init.sql) định nghĩa đầy đủ 8 bảng và hệ thống chỉ mục B-tree tối ưu truy vấn thời gian thực.
+- **Tự động khởi tạo trong Backend Rust**: Hàm `init_schema()` trong [`backend/src/co_so_du_lieu/khoi_tao_bang.rs`](../backend/src/co_so_du_lieu/khoi_tao_bang.rs) tự động tạo bảng khi server khởi động (hỗ trợ cả PostgreSQL và SQLite).
+- **Dữ liệu mẫu PCCC (`database/seed.sql`)**: Cung cấp kịch bản mẫu gồm 4 camera tại khu vực trọng điểm PCCC (*Nhà kho Hóa chất*, *Xưởng Sản xuất A*, *Tầng hầm Bãi xe B1*, *Phòng Kỹ thuật Điện*), 3 mạch ESP32 PCCC, lịch sử cảm biến MQ-2, 5 sự kiện phát hiện **Lửa (`fire`)** & **Khói (`smoke`)**, 4 cảnh báo cháy/khói/khí gas, nhật ký kích hoạt Còi 12V / Khóa từ Solenoid và nhật ký hệ thống.
+- **Nạp dữ liệu mẫu tự động**: Đặt `SEED_DEMO_DATA=true` trong `.env` để hàm `seed_demo_data_if_empty()` trong [`backend/src/dich_vu_nghiep_vu/mod.rs`](../backend/src/dich_vu_nghiep_vu/mod.rs) tự động nạp dữ liệu khi CSDL trống (mặc định `false` trong vận hành sạch).

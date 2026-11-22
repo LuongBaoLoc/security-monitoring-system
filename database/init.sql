@@ -1,4 +1,6 @@
--- Bootstrap schema cho PostgreSQL mới. Schema chạy thật nên được tiến hóa bằng Alembic.
+-- Schema PostgreSQL chuẩn cho Hệ thống Giám sát & Báo động PCCC (SmartSecure)
+-- Đồng bộ với hàm tự động khởi tạo bảng `init_schema()` trong `backend/src/co_so_du_lieu/khoi_tao_bang.rs` (Rust SQLx).
+
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(80) NOT NULL UNIQUE,
@@ -9,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Danh sách Camera IP RTSP / luồng MediaMTX giám sát cháy/khói tại tòa nhà, nhà kho, phân xưởng, bãi xe
 CREATE TABLE IF NOT EXISTS cameras (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(120) NOT NULL,
@@ -22,6 +25,7 @@ CREATE TABLE IF NOT EXISTS cameras (
 );
 CREATE INDEX IF NOT EXISTS ix_cameras_status ON cameras(status);
 
+-- Thiết bị IoT ESP32 PCCC: cảm biến khói/gas MQ-2, cảm biến lửa, Mạch Relay (bơm/phun sương), Còi 12V, Khóa từ Solenoid thoát hiểm
 CREATE TABLE IF NOT EXISTS devices (
     id BIGSERIAL PRIMARY KEY,
     device_code VARCHAR(100) NOT NULL UNIQUE,
@@ -38,6 +42,7 @@ CREATE TABLE IF NOT EXISTS devices (
 );
 CREATE INDEX IF NOT EXISTS ix_devices_status ON devices(status);
 
+-- Lịch sử chuỗi thời gian cảm biến PCCC (MQ-2 ppm, cảm biến lửa, trạng thái Relay/Còi 12V/Solenoid) — cấp dữ liệu cho Dashboard & Grafana
 CREATE TABLE IF NOT EXISTS sensors (
     id BIGSERIAL PRIMARY KEY,
     device_id BIGINT NOT NULL REFERENCES devices(id) ON DELETE RESTRICT,
@@ -47,6 +52,7 @@ CREATE TABLE IF NOT EXISTS sensors (
 );
 CREATE INDEX IF NOT EXISTS ix_sensors_device_type_time ON sensors(device_id, sensor_type, created_at DESC);
 
+-- Sự kiện nhận diện Edge AI YOLOv8 chuyên PCCC (object_type & event_type: fire | smoke) kèm ảnh snapshot trong uploads/events/
 CREATE TABLE IF NOT EXISTS detection_events (
     id BIGSERIAL PRIMARY KEY,
     camera_id BIGINT NOT NULL REFERENCES cameras(id) ON DELETE RESTRICT,
@@ -60,6 +66,7 @@ CREATE TABLE IF NOT EXISTS detection_events (
 CREATE INDEX IF NOT EXISTS ix_detections_camera_time ON detection_events(camera_id, event_timestamp DESC);
 CREATE INDEX IF NOT EXISTS ix_detections_type_time ON detection_events(object_type, event_timestamp DESC);
 
+-- Cảnh báo PCCC: Lửa (CRITICAL), Khói (WARNING/CRITICAL), MQ-2 vượt ngưỡng (CRITICAL), Camera ngoại tuyến
 CREATE TABLE IF NOT EXISTS alerts (
     id BIGSERIAL PRIMARY KEY,
     detection_id BIGINT REFERENCES detection_events(id) ON DELETE RESTRICT,
@@ -75,6 +82,7 @@ CREATE INDEX IF NOT EXISTS ix_alerts_status_time ON alerts(status, created_at DE
 CREATE INDEX IF NOT EXISTS ix_alerts_severity_time ON alerts(severity, created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_alerts_detection ON alerts(detection_id);
 
+-- Nhật ký điều khiển thiết bị ứng cứu PCCC (relay_on/off, buzzer_on/off, unlock/lock) đối chiếu theo command_id ACK
 CREATE TABLE IF NOT EXISTS device_logs (
     id BIGSERIAL PRIMARY KEY,
     device_id BIGINT NOT NULL REFERENCES devices(id) ON DELETE RESTRICT,
@@ -87,6 +95,7 @@ CREATE TABLE IF NOT EXISTS device_logs (
 );
 CREATE INDEX IF NOT EXISTS ix_device_logs_device_time ON device_logs(device_id, created_at DESC);
 
+-- Nhật ký kiểm toán hệ thống PCCC
 CREATE TABLE IF NOT EXISTS system_logs (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
