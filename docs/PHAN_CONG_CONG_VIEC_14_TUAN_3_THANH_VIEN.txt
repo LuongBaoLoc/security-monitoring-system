@@ -1,116 +1,122 @@
 PHAN CONG CONG VIEC DO AN 14 TUAN - 3 THANH VIEN
-De tai: Xay dung he thong giam sat va bao dong an ninh thong minh (Security Monitoring System)
+Ten de tai chinh thuc: Ha tang Giam sat & Bao dong An ninh tich hop Edge AI (YOLOv8) va Mang VPN WireGuard qua Docker
+Dinh huong chuyen sau: Phong chay Chua chay thong minh (PCCC - Nhan dien Lua & Khoi) cho Toa nha, Khu cong nghiep, Nha kho / Bai xe thong minh
 
-PHAN VAI THANH VIEN
-- Thanh vien 1 - Backend/Database: FastAPI, REST API, xac thuc, PostgreSQL, MQTT backend, Docker va tich hop he thong.
-- Thanh vien 2 - Frontend: giao dien dashboard, cac man hinh quan ly, ket noi REST API/WebSocket va hien thi du lieu.
-- Thanh vien 3 - AI/IoT: YOLOv8, xu ly camera/frame, ESP32, cam bien, firmware va giao tiep MQTT.
-- Ca 3 cung tham gia phan tich, thong nhat API/topic/payload, tich hop, danh gia ket qua va viet bao cao. Phan cong nay la ke hoach du kien; dieu chinh theo tien do thuc te cua nhom.
+CONG NGHE THUC TE CUA DU AN
+- Backend API: Rust (Axum + SQLx + Tokio + Rumqttc), 9 thu muc tieng Viet, PostgreSQL 16 + Mosquitto MQTT Broker.
+- Edge AI (Stream Processor): Rust (Axum + tract-onnx), YOLOv8 Nano/Small (.onnx) nhan dien Lua (fire) va Khoi (smoke) chay local (Jetson Nano / PC GPU GTX 1650+ / CPU).
+- Ha tang Mang & Container: Docker Compose, WireGuard VPN Server Container, RTSP Simple Server (MediaMTX), Phan doan VLAN (Camera/IoT - Edge AI/Backend - Quan tri VPN), mo rong Dashboard Grafana.
+- Thiet bi IoT PCCC: Camera IP RTSP / Webcam USB, ESP32 (Firmware Rust esp-idf-svc), Cam bien khoi/gas MQ-2, Cam bien lua (Flame/IR), Coi bao dong 12V, Khoa tu Solenoid (mo cua thoat hiem khan cap), Mach Relay kich hoat (bom chua chay / phun suong / coi 12V).
+- Web Dashboard: Nginx + HTML5/CSS3/JS (REST API + WebSocket realtime, phan quyen ADMIN/OPERATOR, tu dong do trang thai thuc te).
 
-KE HOACH THEO TUAN
+PHAN VAI 3 THANH VIEN
+- Thanh vien 1 - Backend Rust, Database, Mang VPN & Docker: Backend Rust (9 thu muc tieng Viet), REST/WebSocket API, xac thuc JWT/RBAC, PostgreSQL, MQTT adapter, WireGuard VPN Container, RTSP Simple Server (MediaMTX), phan doan VLAN, Grafana va dong goi Docker Compose.
+- Thanh vien 2 - Frontend Web Dashboard PCCC: Giao dien 10 man hinh giam sat PCCC, bang canh bao lua/khoi, quan ly camera/nguoi dung, xem anh snapshot su kien AI, dieu khien ung cuu ESP32 (Coi 12V, Khoa tu Solenoid, Relay) va dong bo WebSocket realtime.
+- Thanh vien 3 - Edge AI (YOLOv8 Lua & Khoi) & IoT ESP32 PCCC: Huan luyen/xuat model YOLOv8 Nano/Small ONNX nhan dien fire & smoke, AI Service Rust (doc RTSP/ffmpeg co timeout, suy luan ONNX + NMS, upload snapshot), Firmware Rust ESP32 doc MQ-2/Flame va dieu khien Relay, Coi 12V, Khoa tu Solenoid co ACK qua MQTT.
+- Ca 3 thanh vien cung tham gia thong nhat yeu cau, kien truc mang/API/MQTT contract, tich hop end-to-end, danh gia ket qua va viet bao cao.
 
-Tuan 1 - Khoi dong va xac dinh yeu cau
-TV1: Lap danh sach chuc nang backend, du kien mo hinh du lieu va API.
-TV2: Khao sat doi tuong su dung, phac thao dashboard va luong thao tac.
-TV3: Khao sat camera, YOLO, ESP32 va cac cam bien co the dung.
-Ca nhom: Chot muc tieu, pham vi, vai tro va ke hoach 14 tuan.
-Dau ra: De cuong, yeu cau chuc nang/phi chuc nang, lich cong viec.
+KE HOACH CHI TIET 14 TUAN
 
-Tuan 2 - Phan tich nghiep vu va kien truc
-TV1: Thiet ke kien truc backend, database va phan quyen.
-TV2: Ve wireframe cac man hinh Tong quan, Camera, Canh bao, IoT va Lich su.
-TV3: Chon phuong an nhan dien, luong xu ly frame va danh sach phan cung.
-Ca nhom: Thong nhat contract REST, WebSocket va MQTT.
-Dau ra: So do kien truc, ERD ban dau, wireframe, API/topic contract.
+Tuan 1 - Khoi dong, Chot Dac ta De tai PCCC & Ke hoach
+- TV1: Lap danh sach yeu cau Backend Rust, mo hinh CSDL PostgreSQL, yeu cau phan doan VLAN va duong ham WireGuard VPN.
+- TV2: Khao sat vai tro nguoi dung (Quan tri vien ADMIN, Truc ban PCCC OPERATOR), phac thao luong thao tac khi co bao chay/khoi.
+- TV3: Khao sat Camera IP RTSP/Webcam USB, tap du lieu & model YOLOv8 Nano/Small nhan dien Lua (fire) va Khoi (smoke), danh sach linh kien ESP32 PCCC (MQ-2, Coi 12V, Khoa tu Solenoid, Mach Relay).
+- Ca nhom: Chot muc tieu, pham vi PCCC bam sat bang dac ta de tai va phan cong 14 tuan.
+- Dau ra: README.md, docs/REQUIREMENTS.md, lich phan cong 14 tuan.
 
-Tuan 3 - Thiet ke chi tiet va chuan bi moi truong
-TV1: Tao project FastAPI, cau hinh SQLAlchemy/PostgreSQL, cau truc module.
-TV2: Tao bo khung frontend, quy uoc component, mau sac va responsive.
-TV3: Cai dat moi truong AI, thu model YOLO; lap so do dau noi ESP32/cam bien.
-Ca nhom: Tao repository, quy uoc branch/commit, bien moi truong va huong dan chay.
-Dau ra: Bo khung chay duoc, tai lieu thiet lap moi truong.
+Tuan 2 - Kien truc Mang VLAN/VPN, Kien truc He thong & API/MQTT Contract
+- TV1: Thiet ke so do kien truc phan doan VLAN (VLAN Camera/IoT, VLAN Edge AI/Backend, VLAN Quan tri WireGuard), RTSP Simple Server (MediaMTX), ERD PostgreSQL 8 bang, RBAC va API/MQTT contract PCCC.
+- TV2: Ve wireframe 10 man hinh Web Dashboard PCCC (Tong quan, Giam sat Camera, Giam sat AI Lua/Khoi, Thiet bi IoT PCCC, Canh bao chay, Lich su, Quan ly Camera/Nguoi dung, Trang thai ha tang, Cai dat) va quy uoc bang mau PCCC.
+- TV3: Chot luong xu ly frame (RTSP -> MediaMTX -> ffmpeg -> YOLOv8 ONNX fire/smoke -> API), so do dau noi GPIO ESP32 (MQ-2, Flame, Relay bom/phun suong, Coi 12V, Khoa tu Solenoid thoat hiem).
+- Ca nhom: Thong nhat contract JSON cho detection (fire/smoke), telemetry MQ-2, lenh dieu khien (relay_on/off, buzzer_on/off, unlock/lock) va ACK.
+- Dau ra: ARCHITECTURE.md, API_DOCUMENTATION.md, DATABASE_DOCUMENTATION.md, WIREFRAMES_AND_UI_DESIGN.md.
 
-Tuan 4 - Database va giao dien tong quan
-TV1: Tao bang User, Camera, Device, Detection, Alert, Sensor va log.
-TV2: Dung layout dashboard, sidebar, header, the thong ke va bieu do.
-TV3: Thu doc camera/frame va chay inference YOLO tren anh mau.
-Ca nhom: Review schema va giao dien voi du lieu mau.
-Dau ra: Database schema ban dau, dashboard prototype, ket qua thu YOLO.
+Tuan 3 - Thiet lap Moi truong Rust, Docker Compose, WireGuard VPN & MediaMTX
+- TV1: Khoi tao Cargo Workspace (backend, ai-service), cau hinh Docker Compose (db, mqtt, backend, frontend, ai-service) kem profiles mo rong (rtsp MediaMTX, vpn WireGuard Server, monitoring Grafana), tao .env.example va wireguard/README.md.
+- TV2: Dung bo khung frontend/, cau hinh Nginx reverse proxy (/api, /ws, /uploads, chan /api/internal/), responsive desktop/mobile va che do Sang/Toi.
+- TV3: Chuan bi moi truong suy luan YOLOv8 ONNX (Jetson Nano / PC GPU GTX 1650+ / CPU), chuan bi tap trong so fire/smoke; lap mach thu nghiem ESP32 voi cam bien khoi/gas MQ-2, coi 12V, khoa tu Solenoid va mach Relay.
+- Ca nhom: Thong nhat quy trinh Git, bien moi truong va tai lieu cai dat HUONG_DAN_CAI_DAT_VA_SU_DUNG.md.
+- Dau ra: Ha tang Docker chay duoc, tai lieu thiet lap moi truong & VPN.
 
-Tuan 5 - Xac thuc va quan ly camera
-TV1: Lam dang nhap JWT, API nguoi dung va CRUD camera.
-TV2: Lam man hinh dang nhap, danh sach camera, tim kiem/loc va form them sua.
-TV3: Chuan hoa camera_id, thu RTSP va quy trinh lay frame.
-Ca nhom: Chot cach bao mat thong tin RTSP va mapping camera.
-Dau ra: Dang nhap va quan ly camera co the tich hop.
+Tuan 4 - Co so Du lieu PCCC, Bo khung Backend 9 Thu muc & Giao dien Tong quan
+- TV1: Hoan thien database/init.sql, database/seed.sql (kich ban PCCC nha kho/xuong/tang ham/bai xe), sap xep backend/src/ thanh 9 thu muc tieng Viet ro rang, tu dong khoi tao bang SQL va nap du lieu mau PCCC.
+- TV2: Hoan thien giao dien Tong quan PCCC (6 the thong ke, bieu do su kien lua/khoi, bang canh bao chay, trang thai thiet bi, tu dong kiem tra trang thai thuc te kem hieu ung animation cham .dot).
+- TV3: Hoan thien khung firmware Rust iot-service/esp32/src/main.rs (MQ-2, Flame, Relay, Coi 12V, Khoa tu Solenoid) va chay thu doc frame/suy luan YOLOv8 tren anh mau chay/khoi.
+- Ca nhom: Review schema, du lieu mau PCCC va giao dien Tong quan.
+- Dau ra: Schema & seed PCCC, Backend 9 thu muc bien dich sach, Dashboard Tong quan & firmware ESP32 khung.
 
-Tuan 6 - Su kien AI va trang giam sat
-TV1: Lam API tiep nhan detection, luu su kien va truy van lich su.
-TV2: Lam trang giam sat camera/AI va bang su kien.
-TV3: Xu ly ket qua YOLO, confidence, nhan doi tuong va gui detection len backend.
-Ca nhom: Thu luong anh/frame -> inference -> API.
-Dau ra: Detection duoc luu va hien thi tren giao dien.
+Tuan 5 - Xac thuc JWT/RBAC, Quan ly Camera PCCC & Bao mat RTSP
+- TV1: Hoan thien xac thuc JWT (xac_thuc.rs), quan ly nguoi dung ADMIN/OPERATOR (quan_ly_nguoi_dung.rs), validate & che mat khau rtsp_url, loc ?search=&location=&status=, giu nguyen URL goc khi sua de trong va tao endpoint noi bo GET /api/internal/cameras/mappings bao ve bang AI_SERVICE_TOKEN.
+- TV2: Hoan thien man hinh dang nhap, quan ly nguoi dung phan quyen, bo loc camera theo khu vuc PCCC, form Them/Sua camera hien ro camera_id va nhac bao toan RTSP URL goc.
+- TV3: Cap nhat ai-service/src/camera.rs an user/password trong log loi RTSP, them timeout khi goi ffmpeg doc luong RTSP/MediaMTX va ket noi lay mapping noi bo tu Backend.
+- Ca nhom: Kiem thu bao mat RTSP, chan /api/internal/ tu Nginx cong khai va test phan quyen ADMIN/OPERATOR.
+- Dau ra: Phan he xac thuc & quan ly camera PCCC an toan.
 
-Tuan 7 - Canh bao va thong ke
-TV1: Lam quy tac tao alert, muc do, chong trung va API xu ly alert.
-TV2: Lam trang canh bao, loc trang thai/muc do va thong ke tong quan.
-TV3: Tinh chinh nguong detection, ghi nhan cac truong hop sai/bo sot.
-Ca nhom: Thong nhat quy tac canh bao va kịch ban demo.
-Dau ra: Canh bao tu detection va giao dien xu ly canh bao.
+Tuan 6 - Su kien AI YOLOv8 (Lua/Khoi), Snapshot & Trang Giam sat AI Realtime
+- TV1: Hoan thien su_kien_ai.rs & main.rs: loc ?camera_id=&object_type=&event_type=&min_confidence=, JOIN camera_name cho chi tiet, API POST /api/detections/snapshot luu anh vao uploads/events/ (chong path traversal + kiem tra magic bytes) va phuc vu tinh /uploads qua ServeDir.
+- TV2: Hien thi anh snapshot that tu image_path tren the .ai-card (co fallback), them bo loc Lua/Khoi/Camera/Do tin cay, bang su kien AI + modal chi tiet GET /api/detections/:id va dong bo realtime WebSocket detection.created.
+- TV3: Trien khai suy luan YOLOv8 ONNX thuc te trong detector.rs (tract-onnx, letterbox 640x640, loc confidence, NMS, anh xa nhan fire/smoke), upload snapshot & gui full payload len POST /api/detections; nang cap CLI test_yolo_sample.rs test tron luong.
+- Ca nhom: Kiem thu tron luong Anh/RTSP -> YOLOv8 (fire/smoke) -> Snapshot -> Backend DB -> Web UI realtime.
+- Dau ra: Luong AI nhan dien Lua & Khoi hoat dong end-to-end kem anh bang chung.
 
-Tuan 8 - ESP32 va thu thap du lieu IoT
-TV1: Lam model/API tiep nhan telemetry, luu gia tri cam bien va trang thai thiet bi.
-TV2: Lam trang danh sach IoT, trang thai online/offline va chi tiet thiet bi.
-TV3: Lap trinh ESP32 doc PIR/MQ-2 va publish du lieu MQTT.
-Ca nhom: Thong nhat device_code, topic va payload.
-Dau ra: Du lieu ESP32/MQTT co the duoc backend tiep nhan va hien thi.
+Tuan 7 - Quy tac Bao chay Da tang, Chong trung & Thong ke PCCC
+- TV1: Tinh chinh quy tac sinh canh bao PCCC (fire -> CRITICAL, smoke -> WARNING/CRITICAL, ket hop MQ-2 vuot nguong), chong trung lap (cooldown) va API xu ly canh bao PUT /api/alerts/:id/resolve.
+- TV2: Hoan thien trang Canh bao PCCC (loc muc do/trang thai, thao tac xac nhan xu ly, xuat CSV) va bieu do thong ke chay/khoi.
+- TV3: Tinh chinh nguong confidence/NMS cho fire & smoke, giam bao dong gia (den vang, anh nang, hoi nuoc).
+- Ca nhom: Dien tap kich ban bao chay som (khoi) va bao chay khan cap (lua).
+- Dau ra: He thong canh bao PCCC va giao dien xu ly su co hoan chinh.
 
-Tuan 9 - Dieu khien thiet bi va WebSocket
-TV1: Lam adapter MQTT cho telemetry, command va ACK; phat su kien WebSocket.
-TV2: Ket noi WebSocket, cap nhat canh bao/trang thai gan thoi gian thuc.
-TV3: Nhan command tren ESP32, dieu khien relay/buzzer/lock va publish ACK.
-Ca nhom: Thu command_id, timeout, loi ket noi va trang thai that.
-Dau ra: Luong dieu khien co phan hoi ACK; khong danh dau thanh cong truoc ACK.
+Tuan 8 - Thu thap Cam bien Khoi/Gas MQ-2 & Giam sat Thiet bi ESP32
+- TV1: Hoan thien luong tiep nhan telemetry MQ-2/Flame qua MQTT & HTTP fallback, cap nhat trang thai online/offline va canh bao tu dong khi MQ-2 vuot nguong ppm.
+- TV2: Hoan thien trang Thiet bi IoT PCCC hien thi truc quan chi so MQ-2 (ppm), nguong bao chay va tinh trang ket noi mach ESP32.
+- TV3: Nap firmware Rust len ESP32 that, hieu chuan cam bien khoi/gas MQ-2 va cam bien lua, kiem tra gui du lieu MQTT dinh ky 5s.
+- Ca nhom: Kiem thu tinh on dinh cua luong cam bien ESP32 -> Mosquitto -> Backend -> Dashboard.
+- Dau ra: Luong giam sat cam bien bao chay IoT hoat dong voi phan cung that.
 
-Tuan 10 - Tich hop cac module
-TV1: Tich hop API, database, MQTT, xu ly loi va kiem tra phan quyen.
-TV2: Noi cac trang frontend voi API, xu ly loading/error/empty state.
-TV3: Noi AI service va ESP32 voi backend, xu ly mat ket noi.
-Ca nhom: Chay end-to-end cac luong camera, detection, alert va IoT.
-Dau ra: Ban tich hop dau tien va danh sach loi can xu ly.
+Tuan 9 - Dieu khien Coi 12V, Khoa tu Solenoid Thoat hiem, Relay & WebSocket
+- TV1: Hoan thien dieu phoi lenh MQTT co command_id (relay_on/off, buzzer_on/off, unlock/lock), xu ly timeout va cap nhat device_logs sau khi nhan ACK; day su kien WebSocket device.command.updated.
+- TV2: Hoan thien bang dieu khien ung cuu khan cap (Bat Coi 12V, Kich hoat Relay bom/phun suong, Nha Khoa tu Solenoid mo cua thoat hiem), hien thi trang thai cho ACK va khoa dieu khien khi ESP32 offline.
+- TV3: Kiem thu dau noi phan cung cach ly quang (Relay 5V -> tai 12V cho Coi 12V va Khoa tu Solenoid Fail-Safe), phan hoi ACK chinh xac ve MQTT.
+- Ca nhom: Kiem thu kich ban chay -> mo cua thoat hiem Solenoid + hu coi 12V + bat relay bom + ghi nhan ACK.
+- Dau ra: Luong dieu khien ung cuu PCCC hai chieu an toan, co ACK.
 
-Tuan 11 - Bao mat va hoan thien chuc nang
-TV1: Ra soat JWT, role, validate input, secrets, log va backup du lieu.
-TV2: Ra soat responsive, accessibility co ban, thong bao loi va thao tac giao dien.
-TV3: Ra soat token AI, MQTT, gioi han payload, reconnect va an toan dau noi phan cung.
-Ca nhom: Khac phuc cac loi uu tien cao.
-Dau ra: Ban ung dung hoan thien chuc nang va checklist bao mat.
+Tuan 10 - Tich hop WireGuard VPN, Phan doan VLAN, RTSP MediaMTX & Grafana
+- TV1: Chay thu nghiem day du Docker profiles (WireGuard Server Container, RTSP Simple Server MediaMTX, Grafana noi PostgreSQL), kiem thu truy cap Dashboard qua duong ham WireGuard VPN.
+- TV2: Kiem tra trang Trang thai he thong tu dong phat hien dung WireGuard VPN / RTSP / AI Worker / ESP32 (cham xanh animation khi bat, cham xam tinh khi tat).
+- TV3: Ket noi Camera IP / Webcam USB day luong vao MediaMTX, AI Service doc luong qua MediaMTX va day canh bao Lua/Khoi + MQ-2 dong thoi.
+- Ca nhom: Chay tich hop end-to-end toan bo he thong qua VPN WireGuard.
+- Dau ra: Ban tich hop day du ha tang mang, AI, IoT va Web.
 
-Tuan 12 - Kiem thu va danh gia
-TV1: Kiem tra API, database, phan trang va cac truong hop loi.
-TV2: Kiem tra cac luong giao dien tren desktop/mobile va du lieu rong.
-TV3: Danh gia detection tren bo anh/video thu, kiem tra sensor va command ACK.
-Ca nhom: Kiem thu tich hop, ghi ket qua, loi con lai va gioi han.
-Dau ra: Bien ban/ma tran kiem thu va danh sach sua loi.
+Tuan 11 - Bao mat Toan dien & Toi uu Hoa Hieu nang
+- TV1: Ra soat bao mat JWT, RBAC, che RTSP, AI_SERVICE_TOKEN, quy tac tuong lua VLAN/VPN va sao luu PostgreSQL.
+- TV2: Ra soat responsive, Dark/Light SOC mode, xu ly mat ket noi mang va thong bao loi ro rang cho truc ban.
+- TV3: Toi uu FPS suy luan YOLOv8 ONNX (Jetson Nano / PC GPU / CPU), reconnect Wi-Fi/MQTT tu dong tren ESP32, kiem tra an toan dien 12V.
+- Ca nhom: Khac phuc cac loi uu tien cao theo checklist bao mat.
+- Dau ra: Ban ung dung hoan thien chuc nang va an toan van hanh.
 
-Tuan 13 - Sua loi, dong goi va chuan bi demo
-TV1: Hoan thien Docker Compose, cau hinh .env mau, README va khoi phuc du lieu demo.
-TV2: Don dep giao dien, chuan bi kich ban demo va anh chup man hinh.
-TV3: Chuan bi model, camera/frame mau, ESP32 va kich ban mat ket noi/ACK.
-Ca nhom: Chay thu demo tren may muc tieu va sua loi cuoi.
-Dau ra: Ban demo co the cai dat, tai lieu chay va kich ban demo.
+Tuan 12 - Kiem thu, Do dac Chi so & Danh gia He thong PCCC
+- TV1: Kiem thu tai API, phan trang, loc du lieu, xu ly loi 401/403/422/503 va do tre WebSocket.
+- TV2: Kiem thu giao dien tren desktop/tablet/mobile, kiem tra quyen ADMIN vs OPERATOR.
+- TV3: Do do chinh xac YOLOv8 Lua/Khoi (Precision, Recall, mAP@50, FPS), thoi gian phan hoi cam bien MQ-2 va do tre ACK dieu khien Solenoid/Coi 12V.
+- Ca nhom: Lap ma tran kiem thu, ghi nhan ket qua do dac va gioi han de tai.
+- Dau ra: Bien ban kiem thu & bang so lieu danh gia PCCC.
 
-Tuan 14 - Bao cao va bao ve
-TV1: Viet phan backend, database, API va quy trinh trien khai.
-TV2: Viet phan giao dien, luong su dung va hinh anh minh hoa.
-TV3: Viet phan AI, IoT, ket qua thu nghiem va gioi han.
-Ca nhom: Tong hop bao cao, slide, tap demo, phan cong thuyet trinh va luyen bao ve.
-Dau ra: Bao cao cuoi, slide, ma nguon va demo san sang.
+Tuan 13 - Dong goi Hoan chinh & Dien tap Demo PCCC
+- TV1: Hoan thien docker-compose.yml, .env.example, backup/restore seed PCCC va quy trinh khoi chay 1 lenh.
+- TV2: Chuan bi kich ban demo truc quan va bo anh chup man hinh cho bao cao.
+- TV3: Chuan bi bo video/anh mau co lua va khoi, mo hinh mach ESP32 (MQ-2, Coi 12V, Khoa tu Solenoid, Relay) va kich ban test mat ket noi.
+- Ca nhom: Tong duyet demo tren may bao ve.
+- Dau ra: Ban demo on dinh va kich ban trinh bay.
+
+Tuan 14 - Hoan thien Bao cao & Bao ve Do an
+- TV1: Viet chuong Kien truc mang (VLAN, WireGuard VPN, MediaMTX, Docker), Backend Rust va CSDL PostgreSQL.
+- TV2: Viet chuong Thiet ke Web Dashboard PCCC, phan quyen va huong dan van hanh.
+- TV3: Viet chuong Edge AI (YOLOv8 Lua/Khoi), phan cung IoT ESP32 PCCC va ket qua thuc nghiem.
+- Ca nhom: Tong hop quyen bao cao, slide thuyet trinh va bao ve truoc hoi dong.
+- Dau ra: Bao cao hoan chinh, slide, ma nguon va he thong demo san sang.
 
 PHAN CHIA SAN PHAM CHINH
-- Thanh vien 1: backend/app, database, API, auth, MQTT adapter, Docker va tai lieu API.
-- Thanh vien 2: frontend, dashboard, cac trang quan ly, ket noi REST/WebSocket va tai lieu giao dien.
-- Thanh vien 3: ai-service, YOLO/model, firmware ESP32, cam bien va tai lieu IoT.
-- Ca nhom: Yeu cau, kien truc, contract tich hop, kiem thu end-to-end, README, bao cao va demo.
-
-Luu y: Tuan va dau ra tren la ke hoach tham khao. Nhom can ghi nhan cong viec da lam theo thuc te, khong dung ke hoach nay de khang dinh cac hang muc da hoan thanh.
+- Thanh vien 1: backend/ (9 thu muc tieng Viet), database/, wireguard/, docker-compose.yml, tai lieu kien truc & API.
+- Thanh vien 2: frontend/ (Web Dashboard PCCC), ket noi REST/WebSocket, phan quyen UI va tai lieu giao dien.
+- Thanh vien 3: ai-service/ (YOLOv8 ONNX fire/smoke), iot-service/esp32/ (MQ-2, Coi 12V, Solenoid, Relay), models/ va ket qua do dac AI/IoT.
+- Ca nhom: Dac ta yeu cau, contract tich hop, kiem thu end-to-end, bao cao va demo.

@@ -1,56 +1,77 @@
-# Security Monitoring System (Rust Edition)
+# Hạ tầng Giám sát & Báo động An ninh tích hợp Edge AI (YOLOv8) và Mạng VPN WireGuard qua Docker
 
-Nền tảng giám sát an ninh tích hợp **Backend API (Rust / Axum / SQLx)**, **Web Dashboard**, **AI Inference Service (Rust / Axum / Image)**, **PostgreSQL/SQLite** và **Firmware ESP32 (Rust / `esp-idf-svc`)** qua MQTT.
+> **Định hướng chuyên sâu:** Hệ thống **Phòng cháy Chữa cháy thông minh (PCCC — SmartSecure Fire & Smoke)** ứng dụng cho **Tòa nhà, Khu công nghiệp, Nhà kho và Bãi xe thông minh**, sử dụng **YOLOv8 nhận diện Lửa (`fire`) & Khói (`smoke`)** thời gian thực kết hợp mạng **VPN WireGuard**, phân đoạn **VLAN**, **RTSP Simple Server (MediaMTX)** và thiết bị ứng cứu **IoT ESP32**.
 
-## Thành phần và ranh giới
+---
 
-- **Backend (`backend/` — Rust Axum + SQLx + Tokio + Rumqttc)**: REST API, xác thực/phân quyền JWT + Bcrypt, persistence (PostgreSQL & SQLite), tiếp nhận sự kiện AI, điều phối lệnh thiết bị MQTT và WebSocket dashboard (`/ws/dashboard`).
-- **PostgreSQL / SQLite**: dữ liệu bền vững (người dùng, camera, thiết bị, cảm biến, sự kiện AI, cảnh báo, nhật ký). Schema được khởi tạo tự động khi backend khởi động; `database/init.sql` là tài liệu tham chiếu SQL.
-- **Frontend (`frontend/` — HTML/CSS/JS)**: dashboard trình duyệt gọi REST/WebSocket. Không kết nối trực tiếp cơ sở dữ liệu hoặc MQTT broker.
-- **AI Service (`ai-service/` — Rust Axum)**: nhận khung hình tại `POST /detect?camera_id=...`, xử lý nhận diện đối tượng và gửi sự kiện phát hiện đến Backend qua `POST /api/detections`. Đi kèm công cụ CLI `test_yolo_sample` viết bằng Rust.
-- **ESP32 Firmware (`iot-service/esp32/` — Rust `esp-idf-svc` + `esp-idf-hal`)**: đọc cảm biến PIR (GPIO 27), MQ-2 (GPIO 34 ADC), điều khiển Relay (GPIO 26), Buzzer (GPIO 25), Khóa cửa (GPIO 33) và giao tiếp qua MQTT broker theo contract.
-- **Docker Compose**: môi trường tích hợp cục bộ cho toàn bộ dịch vụ với multi-stage Rust Dockerfiles.
+## 1. Kiến trúc Thành phần & Công nghệ (Rust + Docker)
 
-## Luồng dữ liệu chính
+- **Backend API (`backend/` — Rust Axum + SQLx + Tokio + Rumqttc)**:
+  - Tổ chức mã nguồn rõ ràng theo **9 thư mục tiếng Việt** (`cau_hinh`, `bao_mat`, `co_so_du_lieu`, `mo_hinh_du_lieu`, `khuon_mau_du_lieu`, `dinh_tuyen_api`, `dich_vu_nghiep_vu`, `giao_tiep_mqtt`, `ket_noi_websocket`).
+  - Xác thực JWT + Bcrypt, phân quyền `ADMIN` / `OPERATOR`, bảo mật che mật khẩu RTSP, endpoint nội bộ cấp mapping RTSP cho AI Service, lưu ảnh snapshot cháy/khói (`uploads/events/`), đánh giá quy tắc báo cháy & chống trùng lặp (deduplication), điều phối lệnh ESP32 có `ACK` qua MQTT và đẩy cảnh báo thời gian thực qua WebSocket (`/ws/dashboard`).
+- **Stream Processor / Edge AI (`ai-service/` — Rust Axum + `tract-onnx`)**:
+  - Chạy mô hình **YOLOv8 Nano / Small** (định dạng `.onnx`, hỗ trợ chạy local trên **Jetson Nano**, **PC GPU Nvidia GTX 1650+** hoặc **CPU**) chuyên nhận diện **Lửa (`fire`)** và **Khói (`smoke`)** thời gian thực.
+  - Đọc khung hình từ **Camera IP RTSP / Webcam USB** qua `ffmpeg` (có timeout & tự động che mật khẩu RTSP trong log), tải ảnh snapshot và gửi sự kiện về `POST /api/detections`. Đi kèm công cụ CLI `test_yolo_sample`.
+- **Thiết bị IoT Ứng cứu PCCC (`iot-service/esp32/` — Rust `esp-idf-svc` + `esp-idf-hal`)**:
+  - Vi điều khiển **ESP32** đọc **Cảm biến khói/gas MQ-2** (`GPIO 34 ADC`), cảm biến lửa/tín hiệu số (`GPIO 27`) và điều khiển **Mạch Relay kích hoạt bơm chữa cháy / van phun sương** (`GPIO 26`), **Còi báo động 12V** (`GPIO 25`), **Khóa từ Solenoid mở cửa thoát hiểm khẩn cấp** (`GPIO 33`) qua **MQTT Broker** có phản hồi `ACK`.
+- **Hạ tầng Mạng, Container & Giám sát Mở rộng (`docker-compose.yml`, `wireguard/`)**:
+  - **Phân đoạn VLAN** (VLAN Camera/IoT hiện trường, VLAN Edge AI/Backend, VLAN Quản trị).
+  - **WireGuard Server Container** (profile `vpn`): tạo đường hầm VPN mã hóa kết nối quản trị từ xa an toàn.
+  - **RTSP Simple Server / MediaMTX** (profile `rtsp`): tiếp nhận và phân phối luồng video RTSP từ Camera IP / Webcam USB.
+  - **PostgreSQL 16** + **Eclipse Mosquitto MQTT Broker** + **Web Dashboard (Nginx + HTML5/CSS3/JS)**.
+  - **Dashboard Grafana** (profile `monitoring`): mở rộng trực quan hóa chuỗi thời gian nồng độ khói/gas MQ-2 và tần suất báo cháy từ PostgreSQL.
 
-1. Trình duyệt đăng nhập REST (`POST /api/auth/login`), nhận JWT access token và dùng token cho API/WebSocket.
-2. AI Service gửi detection qua `POST /api/detections`; backend kiểm tra camera, lưu event, đánh giá chính sách cảnh báo đã cấu hình, chống trùng (deduplication), rồi phát sự kiện realtime tới dashboard.
-3. ESP32 gửi telemetry vào `security/device/{device_id}/sensor` và trạng thái vào `security/device/{device_id}/status`; backend kiểm tra payload và lưu bản ghi gần nhất/lịch sử.
-4. Người dùng gửi lệnh qua `POST /api/devices/{device_id}/command`; backend publish command có `command_id` qua MQTT và cập nhật log khi nhận ACK ở topic `security/device/{device_id}/ack`.
-5. Dashboard lấy dữ liệu ban đầu qua REST và nhận cập nhật thời gian thực qua `/ws/dashboard`.
+---
 
-## Cấu trúc dự án Rust (Cargo Workspace)
+## 2. Luồng Dữ liệu PCCC Chính
+
+1. **Xác thực & Quản trị**: Quản trị viên (`ADMIN`) hoặc trực ban PCCC (`OPERATOR`) đăng nhập qua `POST /api/auth/login` (truy cập qua kênh mạng nội bộ hoặc đường hầm **WireGuard VPN**), nhận JWT token cho REST API và `/ws/dashboard`.
+2. **Phát hiện Lửa & Khói bằng Edge AI**: Camera IP / Webcam USB đẩy luồng video vào **RTSP Simple Server (MediaMTX)**; `ai-service` lấy danh sách RTSP từ endpoint nội bộ `/api/internal/cameras/mappings`, chụp frame, chạy **YOLOv8 (`fire`, `smoke`)**, tải snapshot lên `/api/detections/snapshot` và gửi sự kiện về `POST /api/detections`.
+3. **Đánh giá Cảnh báo Cháy**: Backend lưu sự kiện, phân mức **Khẩn cấp (`CRITICAL`)** cho **Lửa (`fire`)** và **Cảnh báo sớm (`WARNING`)** cho **Khói (`smoke`)** (nâng `CRITICAL` khi độ tin cậy cao hoặc kết hợp MQ-2 vượt ngưỡng), chống trùng lặp theo cooldown, và phát sự kiện realtime `detection.created` / `alert.created` lên Dashboard.
+4. **Cảm biến & Ứng cứu Phần cứng ESP32**: ESP32 gửi định kỳ chỉ số khói/gas MQ-2 vào `security/device/{device_id}/sensor` và trạng thái vào `security/device/{device_id}/status`. Khi trực ban bấm kích hoạt **Bơm/Phun sương (`relay_on`)**, **Còi báo động 12V (`buzzer_on`)** hoặc **Mở khóa Solenoid thoát hiểm (`unlock`)**, Backend gửi lệnh có `command_id` xuống MQTT và chỉ xác nhận hoàn tất khi nhận bản tin `ACK` ở `security/device/{device_id}/ack`.
+
+---
+
+## 3. Cấu trúc Mã nguồn Dự án
 
 ```text
-Cargo.toml                                  # Cargo Workspace (backend, ai-service)
-backend/src/{main,config,db,models,schemas,security,services,routers,mqtt,websocket}.rs
-ai-service/src/{lib,main,config,camera,detector,event_handler}.rs
-ai-service/src/bin/test_yolo_sample.rs
-iot-service/esp32/src/main.rs               # Firmware Rust cho ESP32 (xtensa-esp32-espidf)
-database/{init.sql,seed.sql}
-frontend/{index.html,css/style.css,js/app.js,js/api.js}
+security-monitoring-system/
+├── Cargo.toml                          # Cargo Workspace (backend, ai-service)
+├── docker-compose.yml                  # Stack cốt lõi + profiles (vpn, rtsp, monitoring)
+├── .env.example                        # Biến môi trường mẫu cho PCCC, VPN, RTSP, Grafana
+├── backend/src/                        # Backend Rust Axum — 9 thư mục tiếng Việt
+│   ├── main.rs                         # Điểm khởi chạy server & ServeDir /uploads
+│   ├── cau_hinh/                       # 1. Đọc biến môi trường (.env)
+│   ├── bao_mat/                        # 2. JWT, Bcrypt, phân quyền & AI_SERVICE_TOKEN
+│   ├── co_so_du_lieu/                  # 3. Pool kết nối & tự động tạo bảng SQL
+│   ├── mo_hinh_du_lieu/                # 4. Struct mô hình dữ liệu
+│   ├── khuon_mau_du_lieu/              # 5. Schema JSON & kiểm tra hợp lệ RTSP/User
+│   ├── dinh_tuyen_api/                 # 6. Tách riêng 8 nhánh API chức năng
+│   ├── dich_vu_nghiep_vu/              # 7. Bootstrap Admin, seed PCCC, che RTSP, log
+│   ├── giao_tiep_mqtt/                 # 8. Lắng nghe telemetry/ACK & gửi lệnh ESP32
+│   └── ket_noi_websocket/              # 9. Kênh /ws/dashboard realtime
+├── ai-service/                         # Stream Processor YOLOv8 Lửa & Khói (Rust)
+│   └── src/{lib,main,config,camera,detector,event_handler}.rs + bin/test_yolo_sample.rs
+├── iot-service/esp32/                  # Firmware Rust ESP32 (MQ-2, Còi 12V, Solenoid, Relay)
+├── frontend/                           # Web Dashboard PCCC (Nginx + HTML/CSS/JS)
+├── database/                           # init.sql (Schema) & seed.sql (Dữ liệu mẫu PCCC)
+├── wireguard/                          # Tài liệu & cấu hình WireGuard VPN + phân đoạn VLAN
+└── docs/                               # Hồ sơ phân tích, kiến trúc, API, CSDL, hướng dẫn
 ```
 
-## Chạy nhanh bằng Docker Compose
+---
 
-1. Cài Docker Desktop, sao chép `.env.example` thành `.env`, rồi thay `POSTGRES_PASSWORD`, `SECRET_KEY`, `AI_SERVICE_TOKEN` và `BOOTSTRAP_ADMIN_PASSWORD` bằng giá trị riêng.
-2. Tại thư mục dự án chạy `docker compose up --build`.
-3. Mở dashboard tại <http://localhost:8080>; kiểm tra trạng thái Backend tại <http://localhost:8000/api/system/health>.
-4. Đăng nhập bằng `BOOTSTRAP_ADMIN_USERNAME` và `BOOTSTRAP_ADMIN_PASSWORD` đã đặt trong `.env`.
+## 4. Khởi chạy Nhanh bằng Docker Compose
 
-## Chạy trực tiếp bằng Cargo (Rust Toolchain)
+1. Sao chép `.env.example` thành `.env` và thay các khóa bí mật (`POSTGRES_PASSWORD`, `SECRET_KEY`, `AI_SERVICE_TOKEN`, `BOOTSTRAP_ADMIN_PASSWORD`).
+2. Chạy stack cốt lõi (PostgreSQL, Mosquitto MQTT, Backend Rust, AI Service Rust, Web Dashboard Nginx):
+   ```powershell
+   docker compose up --build -d
+   ```
+3. Bật thêm các dịch vụ hạ tầng mở rộng khi cần demo toàn diện (WireGuard VPN, RTSP Simple Server MediaMTX, Dashboard Grafana):
+   ```powershell
+   docker compose --profile rtsp --profile vpn --profile monitoring up -d
+   ```
+4. Truy cập Web Dashboard tại **<http://localhost:8080>** và kiểm tra tình trạng dịch vụ thực tế tại **<http://localhost:8000/api/system/health>**.
 
-Yêu cầu cài đặt Rust (`rustup`, Rust 1.80+):
-
-```powershell
-# 1. Chạy Backend API (mặc định dùng SQLite nếu không đặt DATABASE_URL, lắng nghe cổng 8000)
-cd backend
-cargo run
-
-# 2. Chạy AI Detection Service (lắng nghe cổng 8001)
-cd ../ai-service
-cargo run --bin security-monitoring-ai-service
-
-# 3. Chạy thử nghiệm CLI đọc frame và nhận diện YOLO trên ảnh mẫu
-cargo run --bin test_yolo_sample
-```
+Xem hướng dẫn chi tiết từng thành viên tại [`docs/HUONG_DAN_CAI_DAT_VA_SU_DUNG.md`](docs/HUONG_DAN_CAI_DAT_VA_SU_DUNG.md).

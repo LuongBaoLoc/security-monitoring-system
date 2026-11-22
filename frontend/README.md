@@ -1,21 +1,14 @@
-# SmartSecure Frontend
+# SmartSecure Web Dashboard — Giao diện Giám sát & Ứng cứu PCCC
 
-Frontend HTML, CSS và JavaScript thuần, được nối với API qua `/api` và WebSocket qua `/ws`. Khuyến nghị chạy bằng Docker Compose để Nginx chuyển tiếp các request đến backend. Có thể mở `index.html` qua static server, nhưng khi đó cần cấu hình reverse proxy cùng origin cho `/api` và `/ws`.
+Web Dashboard viết bằng **HTML5, CSS3 và JavaScript thuần**, phục vụ qua **Nginx** tại cổng `8080` (proxy `/api/`, `/ws/`, `/uploads/` sang Backend Rust và chặn công khai `/api/internal/`).
 
-```powershell
-cd frontend
-python -m http.server 5500
-```
+## Chức năng Chính
 
-Sau đó truy cập `http://localhost:5500`.
+- **10 màn hình điều hành & quản trị PCCC**: Tổng quan PCCC, Giám sát Camera, Giám sát AI (Lửa & Khói kèm ảnh snapshot thật và bảng sự kiện), Thiết bị IoT ESP32 (cảm biến MQ-2, Còi 12V, Khóa từ Solenoid mở cửa thoát hiểm, Mạch Relay), Cảnh báo cháy, Lịch sử sự kiện, Quản lý Camera (hiển thị rõ `camera_id`, che mật khẩu RTSP và bảo toàn URL gốc khi sửa), Quản lý người dùng (`ADMIN`), Trạng thái hệ thống và Cài đặt ngưỡng PCCC.
+- **Đồng bộ thời gian thực**: Kết nối WebSocket `/ws/dashboard` tự động nhận `detection.created`, `alert.created`, `device.status`, `device.command.updated` và tự động thăm dò thực tế `GET /api/system/health` mỗi 6 giây.
+- **Trạng thái trung thực & Animation `.dot`**: Thành phần hoạt động thực tế hiện chấm xanh lá có hiệu ứng sóng lan tỏa; cảnh báo cháy/khói nhấp nháy đỏ/cam; dịch vụ chưa bật (WireGuard VPN, RTSP MediaMTX, AI Worker, ESP32) hiện chấm xám tĩnh `"Tạm thời chưa hoạt động"`.
+- **Phân quyền `ADMIN` / `OPERATOR`** và chuyển đổi nhanh giao diện **Enterprise Light / Cyber Dark SOC**.
 
-## Nội dung
+## Khởi chạy & Phát triển
 
-- 10 màn hình điều hướng: tổng quan, giám sát camera, giám sát AI, IoT, cảnh báo, lịch sử, quản lý camera, người dùng, trạng thái hệ thống và cài đặt. Đăng nhập API bằng tài khoản khởi tạo qua biến môi trường.
-- Dashboard có biểu đồ, cảnh báo mới và camera ưu tiên; trang giám sát camera có lưới camera cùng bộ lọc khu vực/trạng thái và xem chi tiết.
-- Điều hướng sidebar responsive, modal thêm/sửa, hộp thoại xác nhận, toast minh họa và các điều khiển giao diện cục bộ.
-- Biểu đồ, trạng thái, lịch sử và ảnh camera là dữ liệu/đồ họa minh họa được dựng trong CSS/HTML.
-
-## Giới hạn hiện tại
-
-Một số trang chuyên biệt vẫn chứa dữ liệu giao diện minh họa; dashboard tổng quan tải thống kê/cảnh báo từ API. Chưa có live video; các thẻ camera vẫn là ảnh dựng bằng CSS. Thư viện Lucide tải từ CDN để hiển thị icon.
+Khuyến nghị chạy cùng Docker Compose (`docker compose up -d`) và truy cập **<http://localhost:8080>**. Sau khi chỉnh sửa file trong `frontend/`, nhấn **`Ctrl + F5`** trên trình duyệt để tải ngay bản mới. Khi cần trực quan hóa dài hạn nồng độ khói/gas MQ-2 và lịch sử sự cố, có thể bật thêm **Dashboard Grafana (`:3000`)** bằng `docker compose --profile monitoring up -d`.

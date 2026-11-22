@@ -11,6 +11,7 @@ use crate::{
     mo_hinh_du_lieu::{now_iso, Camera},
 };
 
+/// Che user/password, query và fragment của RTSP URL trước khi trả cho Frontend.
 pub fn redact_rtsp_url(rtsp_url: &str) -> String {
     if let Ok(mut parsed) = Url::parse(rtsp_url) {
         let _ = parsed.set_username("");
@@ -23,12 +24,22 @@ pub fn redact_rtsp_url(rtsp_url: &str) -> String {
     }
 }
 
+/// RTSP URL có chứa thông tin đăng nhập (user/password) hay không — chỉ trả cờ, không trả giá trị.
+pub fn rtsp_has_credentials(rtsp_url: &str) -> bool {
+    Url::parse(rtsp_url)
+        .map(|u| !u.username().is_empty() || u.password().is_some())
+        .unwrap_or(false)
+}
+
+/// JSON camera an toàn cho Frontend (RTSP URL đã che thông tin đăng nhập).
 pub fn camera_json(camera: &Camera) -> Value {
     json!({
         "id": camera.id,
+        "camera_id": camera.id,
         "name": camera.name,
         "ip_address": camera.ip_address,
         "rtsp_url": redact_rtsp_url(&camera.rtsp_url),
+        "rtsp_has_credentials": rtsp_has_credentials(&camera.rtsp_url),
         "location": camera.location,
         "status": camera.status,
         "last_seen": camera.last_seen,
@@ -105,37 +116,37 @@ pub async fn seed_demo_data_if_empty(pool: &AnyPool) -> Result<(), sqlx::Error> 
 
     let cameras = [
         (
-            "CAM-01 · Cổng chính",
-            "192.168.1.21",
-            "rtsp://demo:secret@192.168.1.21:554/stream1",
-            "Cổng phía Đông",
+            "CAM-01 · Nhà kho Hóa chất",
+            "192.168.10.21",
+            "rtsp://mediamtx:8554/cam_kho_hoa_chat",
+            "Nhà kho Khu A",
             "ONLINE",
             (now - Duration::minutes(1)).to_rfc3339(),
             (now - Duration::days(7)).to_rfc3339(),
         ),
         (
-            "CAM-02 · Sảnh lễ tân",
-            "192.168.1.22",
-            "rtsp://demo:secret@192.168.1.22:554/stream1",
-            "Tầng trệt",
+            "CAM-02 · Xưởng Sản xuất A",
+            "192.168.10.22",
+            "rtsp://mediamtx:8554/cam_xuong_san_xuat_a",
+            "Phân xưởng 1",
             "ONLINE",
             (now - Duration::minutes(2)).to_rfc3339(),
             (now - Duration::days(7)).to_rfc3339(),
         ),
         (
-            "CAM-03 · Hành lang A",
-            "192.168.1.23",
-            "rtsp://demo:secret@192.168.1.23:554/stream1",
-            "Tầng 1",
+            "CAM-03 · Tầng hầm Bãi xe B1",
+            "192.168.10.23",
+            "rtsp://mediamtx:8554/cam_tang_ham_b1",
+            "Tầng hầm B1",
             "ONLINE",
             (now - Duration::minutes(3)).to_rfc3339(),
             (now - Duration::days(6)).to_rfc3339(),
         ),
         (
-            "CAM-08 · Kho hàng",
-            "192.168.1.28",
-            "rtsp://demo:secret@192.168.1.28:554/stream1",
-            "Khu nhà kho",
+            "CAM-04 · Phòng Kỹ thuật Điện",
+            "192.168.10.24",
+            "rtsp://mediamtx:8554/cam_phong_dien",
+            "Tầng kỹ thuật",
             "OFFLINE",
             (now - Duration::hours(2)).to_rfc3339(),
             (now - Duration::days(5)).to_rfc3339(),
@@ -163,11 +174,11 @@ pub async fn seed_demo_data_if_empty(pool: &AnyPool) -> Result<(), sqlx::Error> 
 
     let dev1 = sqlx::query(
         "INSERT INTO devices (device_code, device_name, device_type, status, last_seen, latest_pir, latest_mq2, relay, buzzer, lock_engaged, created_at)
-         VALUES ($1, $2, 'ESP32', 'ONLINE', $3, FALSE, 350.0, FALSE, FALSE, TRUE, $4) RETURNING id",
+         VALUES ($1, $2, 'ESP32', 'ONLINE', $3, FALSE, 340.0, FALSE, FALSE, TRUE, $4) RETURNING id",
     )
-    .bind("ESP32_001")
-    .bind("ESP32 khu vực A · Tầng 1")
-    .bind((now - Duration::seconds(30)).to_rfc3339())
+    .bind("ESP32_KHO_01")
+    .bind("ESP32 PCCC · Nhà kho Khu A")
+    .bind((now - Duration::seconds(25)).to_rfc3339())
     .bind((now - Duration::days(7)).to_rfc3339())
     .fetch_one(pool)
     .await?;
@@ -175,11 +186,11 @@ pub async fn seed_demo_data_if_empty(pool: &AnyPool) -> Result<(), sqlx::Error> 
 
     let dev2 = sqlx::query(
         "INSERT INTO devices (device_code, device_name, device_type, status, last_seen, latest_pir, latest_mq2, relay, buzzer, lock_engaged, created_at)
-         VALUES ($1, $2, 'ESP32', 'OFFLINE', $3, FALSE, 280.0, FALSE, FALSE, TRUE, $4) RETURNING id",
+         VALUES ($1, $2, 'ESP32', 'ONLINE', $3, TRUE, 720.0, TRUE, TRUE, FALSE, $4) RETURNING id",
     )
-    .bind("ESP32_002")
-    .bind("ESP32 khu vực B · Kho hàng")
-    .bind((now - Duration::hours(5)).to_rfc3339())
+    .bind("ESP32_BAIXE_B1")
+    .bind("ESP32 PCCC · Tầng hầm Bãi xe B1")
+    .bind((now - Duration::seconds(40)).to_rfc3339())
     .bind((now - Duration::days(6)).to_rfc3339())
     .fetch_one(pool)
     .await?;
@@ -188,27 +199,27 @@ pub async fn seed_demo_data_if_empty(pool: &AnyPool) -> Result<(), sqlx::Error> 
     let sensors = [
         (
             dev1_id,
-            "pir",
-            json!({"value": false}).to_string(),
-            (now - Duration::minutes(5)).to_rfc3339(),
-        ),
-        (
-            dev1_id,
             "mq2",
-            json!({"value": 350.0}).to_string(),
+            json!({"value": 340.0, "unit": "ppm"}).to_string(),
             (now - Duration::minutes(5)).to_rfc3339(),
         ),
         (
             dev1_id,
             "lock",
-            json!({"value": true}).to_string(),
+            json!({"value": true, "label": "solenoid_locked"}).to_string(),
             (now - Duration::minutes(5)).to_rfc3339(),
         ),
         (
             dev2_id,
             "mq2",
-            json!({"value": 280.0}).to_string(),
-            (now - Duration::hours(5)).to_rfc3339(),
+            json!({"value": 720.0, "unit": "ppm"}).to_string(),
+            (now - Duration::minutes(2)).to_rfc3339(),
+        ),
+        (
+            dev2_id,
+            "relay",
+            json!({"value": true, "label": "pump_sprinkler_on"}).to_string(),
+            (now - Duration::minutes(2)).to_rfc3339(),
         ),
     ];
     for (did, stype, sval, created) in sensors {
@@ -226,43 +237,43 @@ pub async fn seed_demo_data_if_empty(pool: &AnyPool) -> Result<(), sqlx::Error> 
     let detections = [
         (
             cam_ids[0],
-            "person",
-            0.968_f64,
-            "intrusion",
-            "uploads/events/event_001.jpg",
-            (now - Duration::minutes(15)).to_rfc3339(),
+            "fire",
+            0.962_f64,
+            "fire",
+            "uploads/events/fire_kho_a_001.jpg",
+            (now - Duration::minutes(12)).to_rfc3339(),
         ),
         (
             cam_ids[2],
-            "person",
-            0.921_f64,
-            "person",
-            "uploads/events/event_002.jpg",
-            (now - Duration::minutes(35)).to_rfc3339(),
-        ),
-        (
-            cam_ids[0],
-            "car",
-            0.887_f64,
-            "object",
-            "uploads/events/event_003.jpg",
-            (now - Duration::minutes(70)).to_rfc3339(),
+            "smoke",
+            0.894_f64,
+            "smoke",
+            "uploads/events/smoke_bai_xe_002.jpg",
+            (now - Duration::minutes(28)).to_rfc3339(),
         ),
         (
             cam_ids[1],
-            "person",
-            0.854_f64,
-            "person",
-            "uploads/events/event_004.jpg",
-            (now - Duration::hours(26)).to_rfc3339(),
+            "smoke",
+            0.845_f64,
+            "smoke",
+            "uploads/events/smoke_xuong_a_003.jpg",
+            (now - Duration::minutes(75)).to_rfc3339(),
         ),
         (
             cam_ids[0],
-            "truck",
-            0.831_f64,
-            "object",
-            "uploads/events/event_005.jpg",
-            (now - Duration::hours(51)).to_rfc3339(),
+            "fire",
+            0.918_f64,
+            "fire",
+            "uploads/events/fire_kho_a_004.jpg",
+            (now - Duration::hours(26)).to_rfc3339(),
+        ),
+        (
+            cam_ids[2],
+            "smoke",
+            0.812_f64,
+            "smoke",
+            "uploads/events/smoke_bai_xe_005.jpg",
+            (now - Duration::hours(50)).to_rfc3339(),
         ),
     ];
 
@@ -287,43 +298,43 @@ pub async fn seed_demo_data_if_empty(pool: &AnyPool) -> Result<(), sqlx::Error> 
     let alerts = [
         (
             Some(det_ids[0]),
-            "intrusion",
+            "fire",
             "CRITICAL",
-            "Phát hiện người xâm nhập tại CAM-01 · Cổng chính",
+            "BÁO CHÁY KHẨN CẤP: YOLOv8 phát hiện Lửa (96.2%) tại CAM-01 · Nhà kho Hóa chất",
             "OPEN",
             None::<i64>,
-            (now - Duration::minutes(15)).to_rfc3339(),
+            (now - Duration::minutes(12)).to_rfc3339(),
             None::<String>,
         ),
         (
             Some(det_ids[1]),
-            "person",
+            "smoke",
             "WARNING",
-            "Chuyển động tại hành lang CAM-03 · Hành lang A",
+            "Cảnh báo sớm: YOLOv8 phát hiện Khói (89.4%) tại CAM-03 · Tầng hầm Bãi xe B1",
             "OPEN",
             None::<i64>,
-            (now - Duration::minutes(35)).to_rfc3339(),
+            (now - Duration::minutes(28)).to_rfc3339(),
             None::<String>,
         ),
         (
             None,
-            "camera_offline",
-            "WARNING",
-            "Camera mất kết nối tại CAM-08 · Kho hàng",
+            "gas_mq2",
+            "CRITICAL",
+            "Cảm biến khói/gas MQ-2 vượt ngưỡng (720 ppm) tại ESP32_BAIXE_B1 · Tầng hầm Bãi xe B1",
             "OPEN",
             None::<i64>,
-            (now - Duration::hours(2)).to_rfc3339(),
+            (now - Duration::minutes(2)).to_rfc3339(),
             None::<String>,
         ),
         (
             Some(det_ids[2]),
-            "vehicle",
-            "INFO",
-            "Nhận diện phương tiện tại CAM-01 · Cổng chính",
+            "smoke",
+            "WARNING",
+            "Phát hiện Khói nhẹ (84.5%) tại CAM-02 · Xưởng Sản xuất A (đã kiểm tra an toàn)",
             "RESOLVED",
             admin_id,
-            (now - Duration::minutes(70)).to_rfc3339(),
-            Some((now - Duration::minutes(50)).to_rfc3339()),
+            (now - Duration::minutes(75)).to_rfc3339(),
+            Some((now - Duration::minutes(55)).to_rfc3339()),
         ),
     ];
 
@@ -346,13 +357,13 @@ pub async fn seed_demo_data_if_empty(pool: &AnyPool) -> Result<(), sqlx::Error> 
 
     sqlx::query(
         "INSERT INTO device_logs (device_id, command_id, command, result, detail, created_at, completed_at)
-         VALUES ($1, $2, 'buzzer_off', 'ACCEPTED', $3, $4, $5)",
+         VALUES ($1, $2, 'unlock', 'ACCEPTED', $3, $4, $5)",
     )
-    .bind(dev1_id)
+    .bind(dev2_id)
     .bind("00000000-0000-4000-8000-000000000001")
-    .bind(json!({"status": "accepted", "device_id": "ESP32_001"}).to_string())
-    .bind((now - Duration::minutes(45)).to_rfc3339())
-    .bind((now - Duration::minutes(45) + Duration::seconds(1)).to_rfc3339())
+    .bind(json!({"status": "accepted", "device_id": "ESP32_BAIXE_B1", "hardware": "solenoid_exit_door"}).to_string())
+    .bind((now - Duration::minutes(2)).to_rfc3339())
+    .bind((now - Duration::minutes(2) + Duration::seconds(1)).to_rfc3339())
     .execute(pool)
     .await?;
 
@@ -360,20 +371,20 @@ pub async fn seed_demo_data_if_empty(pool: &AnyPool) -> Result<(), sqlx::Error> 
         (
             None::<i64>,
             "AI_DETECTION",
-            "Phát hiện người tại CAM-01 · Cổng chính · Độ tin cậy 96.8%",
-            (now - Duration::minutes(15)).to_rfc3339(),
+            "YOLOv8 phát hiện Lửa (fire · 96.2%) tại CAM-01 · Nhà kho Hóa chất",
+            (now - Duration::minutes(12)).to_rfc3339(),
         ),
         (
             None::<i64>,
             "SENSOR_TELEMETRY",
-            "Cập nhật cảm biến MQ-2 (350 ppm) từ thiết bị ESP32_001",
-            (now - Duration::minutes(30)).to_rfc3339(),
+            "Cảnh báo nồng độ khói/gas MQ-2 (720 ppm) từ mạch ESP32_BAIXE_B1",
+            (now - Duration::minutes(2)).to_rfc3339(),
         ),
         (
             admin_id,
             "ALERT_RESOLVED",
-            "Đã xử lý cảnh báo nhận diện phương tiện tại CAM-01",
-            (now - Duration::minutes(50)).to_rfc3339(),
+            "Trực ban PCCC xác nhận xử lý cảnh báo Khói tại CAM-02 · Xưởng Sản xuất A",
+            (now - Duration::minutes(55)).to_rfc3339(),
         ),
     ];
     for (uid, act, desc, created) in sys_logs {

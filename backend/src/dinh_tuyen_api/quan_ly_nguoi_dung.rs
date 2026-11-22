@@ -8,10 +8,13 @@ use axum::{
 use serde_json::{json, Value};
 
 use crate::{
-    bao_mat::{admin_user, current_user, hash_password, ApiError},
+    bao_mat::{admin_user, hash_password, ApiError},
     co_so_du_lieu::{map_user, row_i64, AppState},
     dich_vu_nghiep_vu::record_system_log,
-    khuon_mau_du_lieu::{envelope, normalize_role, UserCreate, UserUpdate},
+    khuon_mau_du_lieu::{
+        envelope, normalize_role, validate_full_name, validate_password, validate_username,
+        UserCreate, UserUpdate,
+    },
     mo_hinh_du_lieu::{now_iso, User},
 };
 
@@ -19,7 +22,7 @@ pub async fn list_users(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Json<Value>, ApiError> {
-    let _ = current_user(&headers, &state).await?;
+    let _ = admin_user(&headers, &state).await?;
     let rows = sqlx::query("SELECT * FROM users ORDER BY id ASC")
         .fetch_all(&state.db)
         .await?;
@@ -36,17 +39,10 @@ pub async fn create_user(
     Json(payload): Json<UserCreate>,
 ) -> Result<(StatusCode, Json<Value>), ApiError> {
     let admin = admin_user(&headers, &state).await?;
-    if payload.password.len() < 8 {
-        return Err(ApiError::unprocessable("Mật khẩu phải từ 8 ký tự trở lên"));
-    }
+    let username = validate_username(&payload.username).map_err(ApiError::unprocessable)?;
+    let full_name = validate_full_name(&payload.full_name).map_err(ApiError::unprocessable)?;
+    validate_password(&payload.password).map_err(ApiError::unprocessable)?;
     let role = normalize_role(&payload.role).map_err(ApiError::unprocessable)?;
-    let username = payload.username.trim().to_string();
-    let full_name = payload.full_name.trim().to_string();
-    if username.is_empty() || full_name.is_empty() {
-        return Err(ApiError::unprocessable(
-            "Username và họ tên không được để trống",
-        ));
-    }
 
     let existing = sqlx::query("SELECT id FROM users WHERE username = $1")
         .bind(&username)
@@ -126,7 +122,7 @@ pub async fn update_user(
     }
 
     if let Some(ref name) = payload.full_name {
-        target.full_name = name.trim().to_string();
+        target.full_name = validate_full_name(name).map_err(ApiError::unprocessable)?;
     }
     if let Some(ref role) = payload.role {
         target.role = normalize_role(role).map_err(ApiError::unprocessable)?;
@@ -136,9 +132,7 @@ pub async fn update_user(
     }
     if let Some(ref pwd) = payload.password {
         if !pwd.is_empty() {
-            if pwd.len() < 8 {
-                return Err(ApiError::unprocessable("Mật khẩu phải từ 8 ký tự trở lên"));
-            }
+            validate_password(pwd).map_err(ApiError::unprocessable)?;
             target.password_hash = hash_password(pwd)?;
         }
     }

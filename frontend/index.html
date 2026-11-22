@@ -4,21 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f7fb">
-  <meta name="description" content="SmartSecure — trung tâm giám sát an ninh.">
-  <title>SmartSecure — Security Monitoring System</title>
-  <link rel="stylesheet" href="css/style.css?v=10">
+  <meta name="description" content="SmartSecure PCCC — Trung tâm giám sát & báo động Phòng cháy Chữa cháy tích hợp Edge AI YOLOv8 và WireGuard VPN.">
+  <title>SmartSecure PCCC — Hệ thống Giám sát & Báo cháy Edge AI</title>
+  <link rel="stylesheet" href="css/style.css?v=12">
 </head>
 <body>
 <div id="smartsecure-prototype">
 <div class="app">
     <aside class="sidebar" id="ss-sidebar">
-      <div class="brand"><div class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6l8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div><div>SmartSecure<small>SECURITY MONITORING</small></div></div>
+      <div class="brand"><div class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6l8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div><div>SmartSecure<small>PCCC · EDGE AI &amp; VPN</small></div></div>
       <div><div class="nav-label">Điều hành</div><nav class="nav" aria-label="Điều hướng chính">
         <button class="active" data-view="overview"><i data-lucide="layout-dashboard"></i>Tổng quan</button>
         <button data-view="monitor"><i data-lucide="cctv"></i>Giám sát Camera</button>
-        <button data-view="ai"><i data-lucide="scan-search"></i>Giám sát AI</button>
-        <button data-view="iot"><i data-lucide="cpu"></i>Thiết bị IoT</button>
-        <button data-view="alerts"><i data-lucide="triangle-alert"></i>Cảnh báo an ninh <span class="nav-count">0</span></button>
+        <button data-view="ai"><i data-lucide="flame"></i>Giám sát AI Lửa/Khói</button>
+        <button data-view="iot"><i data-lucide="cpu"></i>Thiết bị IoT PCCC</button>
+        <button data-view="alerts"><i data-lucide="triangle-alert"></i>Cảnh báo PCCC <span class="nav-count">0</span></button>
         <button data-view="history"><i data-lucide="history"></i>Lịch sử sự kiện</button>
       </nav></div>
       <div><div class="nav-label">Quản trị</div><nav class="nav" aria-label="Quản trị">
@@ -53,20 +53,20 @@
       <main class="content" id="ss-content">
         <!-- 1. OVERVIEW -->
         <section class="view" data-page="overview">
-          <div class="page-head"><div><div class="eyebrow">Hệ thống giám sát an ninh</div><h1>Tổng quan hệ thống</h1><div class="subtitle" id="ss-overview-greeting">Xin chào, Administrator. Đây là tình hình an ninh hôm nay.</div></div><div class="head-actions"><span class="updated">Đang đồng bộ...</span><span class="system-pill"><i class="dot"></i>Hệ thống ổn định</span><button class="btn" data-action="refresh"><i data-lucide="refresh-cw"></i>Làm mới</button></div></div>
+          <div class="page-head"><div><div class="eyebrow">Hệ thống Giám sát &amp; Báo cháy PCCC</div><h1>Tổng quan hệ thống</h1><div class="subtitle" id="ss-overview-greeting">Xin chào, Administrator. Đây là tình hình giám sát PCCC hôm nay.</div></div><div class="head-actions"><span class="updated">Đang đồng bộ...</span><span class="system-pill"><i class="dot"></i>Hệ thống ổn định</span><button class="btn" data-action="refresh"><i data-lucide="refresh-cw"></i>Làm mới</button></div></div>
           <div class="stats">
             <div class="stat"><div class="stat-top">Tổng số Camera <span class="stat-icon"><i data-lucide="cctv"></i></span></div><div class="stat-value">0</div><div class="stat-foot"><span class="trend">0 hoạt động</span> · 0 ngoại tuyến</div></div>
-            <div class="stat"><div class="stat-top">Camera hoạt động <span class="stat-icon green"><i data-lucide="video"></i></span></div><div class="stat-value">0 / 0</div><div class="stat-foot"><span class="trend">Trực tuyến</span> · Đang giám sát</div></div>
-            <div class="stat"><div class="stat-top">Thiết bị IoT <span class="stat-icon"><i data-lucide="cpu"></i></span></div><div class="stat-value">0</div><div class="stat-foot"><span class="trend">0 trực tuyến</span> · 0 ngoại tuyến</div></div>
-            <div class="stat"><div class="stat-top">Sự kiện AI hôm nay <span class="stat-icon"><i data-lucide="scan-eye"></i></span></div><div class="stat-value">0</div><div class="stat-foot"><span class="trend">Hôm nay</span> · Ghi nhận từ AI</div></div>
-            <div class="stat"><div class="stat-top">Cảnh báo hôm nay <span class="stat-icon orange"><i data-lucide="bell-ring"></i></span></div><div class="stat-value">0</div><div class="stat-foot"><span class="trend down">0 đang chờ</span> xử lý</div></div>
-            <div class="stat"><div class="stat-top">Nghiêm trọng <span class="stat-icon red"><i data-lucide="shield-alert"></i></span></div><div class="stat-value">0</div><div class="stat-foot">0 cảnh báo mức CRITICAL đang mở</div></div>
+            <div class="stat"><div class="stat-top">Camera hoạt động <span class="stat-icon green"><i data-lucide="video"></i></span></div><div class="stat-value">0 / 0</div><div class="stat-foot"><span class="trend">Trực tuyến</span> · Đang giám sát PCCC</div></div>
+            <div class="stat"><div class="stat-top">Mạch ESP32 PCCC <span class="stat-icon"><i data-lucide="cpu"></i></span></div><div class="stat-value">0</div><div class="stat-foot"><span class="trend">0 trực tuyến</span> · 0 ngoại tuyến</div></div>
+            <div class="stat"><div class="stat-top">Phát hiện Lửa/Khói <span class="stat-icon"><i data-lucide="flame"></i></span></div><div class="stat-value">0</div><div class="stat-foot"><span class="trend">Hôm nay</span> · YOLOv8 Edge AI</div></div>
+            <div class="stat"><div class="stat-top">Cảnh báo PCCC <span class="stat-icon orange"><i data-lucide="bell-ring"></i></span></div><div class="stat-value">0</div><div class="stat-foot"><span class="trend down">0 đang chờ</span> xử lý</div></div>
+            <div class="stat"><div class="stat-top">Báo cháy khẩn cấp <span class="stat-icon red"><i data-lucide="shield-alert"></i></span></div><div class="stat-value">0</div><div class="stat-foot">0 cảnh báo mức CRITICAL đang mở</div></div>
           </div>
           <div class="grid-main">
             <article class="panel">
               <div class="panel-head">
-                <div><div class="panel-title">Sự kiện an ninh theo thời gian</div><div class="panel-note" id="ss-chart-range-note">Tổng sự kiện và cảnh báo trong 7 ngày gần nhất</div></div>
-                <div class="chart-legend"><span class="legend-key"><i class="legend-dot"></i>Sự kiện AI</span><span class="legend-key"><i class="legend-dot orange"></i>Cảnh báo</span>
+                <div><div class="panel-title">Sự kiện cháy/khói &amp; Cảnh báo theo thời gian</div><div class="panel-note" id="ss-chart-range-note">Tổng lượt phát hiện Lửa/Khói và cảnh báo trong 7 ngày gần nhất</div></div>
+                <div class="chart-legend"><span class="legend-key"><i class="legend-dot"></i>Lửa / Khói AI</span><span class="legend-key"><i class="legend-dot orange"></i>Cảnh báo PCCC</span>
                   <select class="select" id="ss-overview-days" aria-label="Khoảng thời gian"><option value="7">7 ngày qua</option><option value="30">30 ngày qua</option></select>
                 </div>
               </div>
@@ -82,7 +82,7 @@
                 </div>
               </div>
             </article>
-            <article class="panel"><div class="panel-head"><div><div class="panel-title">Phân loại đối tượng AI</div><div class="panel-note" id="ss-overview-ai-note">0 lượt nhận diện</div></div><button class="btn subtle" data-view-link="ai">Chi tiết</button></div><div class="donut-wrap"><div class="donut-box"><div class="donut" id="ss-overview-donut" style="background:#e2e8f0"></div><div class="donut-center">0<small>đối tượng</small></div></div><div class="legend-list"><div class="legend-row">Chưa có dữ liệu nhận diện</div></div></div></article>
+            <article class="panel"><div class="panel-head"><div><div class="panel-title">Phân loại phát hiện Lửa &amp; Khói (YOLOv8)</div><div class="panel-note" id="ss-overview-ai-note">0 lượt nhận diện</div></div><button class="btn subtle" data-view-link="ai">Chi tiết</button></div><div class="donut-wrap"><div class="donut-box"><div class="donut" id="ss-overview-donut" style="background:#e2e8f0"></div><div class="donut-center">0<small>sự kiện</small></div></div><div class="legend-list"><div class="legend-row">Chưa có dữ liệu nhận diện</div></div></div></article>
           </div>
           <div class="grid-main">
             <article class="panel"><div class="panel-head"><div><div class="panel-title">Cảnh báo mới nhất</div><div class="panel-note">Các sự kiện cần chú ý gần đây</div></div><button class="btn subtle" data-view-link="alerts">Xem tất cả <i data-lucide="arrow-right"></i></button></div><div class="table-wrap"><table class="table"><thead><tr><th>Mã</th><th>Nội dung</th><th>Loại</th><th>Mức độ</th><th>Thời gian</th><th>Trạng thái</th></tr></thead><tbody><tr><td colspan="6" style="text-align:center;color:#64748b;padding:20px">Chưa có cảnh báo nào.</td></tr></tbody></table></div></article>
@@ -103,19 +103,33 @@
           <div class="camera-gallery"><div style="color:#64748b;padding:24px"><span class="dot offline"></span>Tạm thời chưa hoạt động (Chưa có camera trực tuyến).</div></div>
         </section>
 
-        <!-- 3. AI MONITORING -->
+        <!-- 3. AI MONITORING (PCCC FIRE & SMOKE) -->
         <section class="view" data-page="ai" hidden>
-          <div class="page-head"><div><div class="eyebrow">Edge AI · YOLOv8</div><h1>Giám sát AI</h1><div class="subtitle">Các đối tượng được nhận diện trong hệ thống.</div></div><div class="head-actions"><span class="status unknown" id="ss-ai-head-pill"><i class="dot offline"></i>AI Worker: Tạm thời chưa hoạt động</span><button class="btn primary" id="ss-btn-sim-ai"><i data-lucide="sparkles"></i>Gửi sự kiện AI thử nghiệm</button><button class="btn" data-action="refresh"><i data-lucide="refresh-cw"></i>Làm mới</button></div></div>
+          <div class="page-head"><div><div class="eyebrow">Edge AI · YOLOv8 PCCC (Lửa &amp; Khói)</div><h1>Giám sát AI Lửa &amp; Khói</h1><div class="subtitle">Ảnh chụp bằng chứng cháy/khói thật (snapshot), danh sách nhận diện realtime qua WebSocket và chi tiết sự kiện.</div></div><div class="head-actions"><span class="status unknown" id="ss-ai-head-pill"><i class="dot offline"></i>AI Worker: Tạm thời chưa hoạt động</span><button class="btn primary" id="ss-btn-sim-ai"><i data-lucide="flame"></i>Gửi sự kiện Lửa/Khói thử nghiệm</button><button class="btn" data-action="refresh"><i data-lucide="refresh-cw"></i>Làm mới</button></div></div>
           <div class="filters" id="ss-ai-filters">
             <button class="filter-chip active" data-ai-filter="all">Tất cả <b data-ai-count="all">0</b></button>
-            <button class="filter-chip" data-ai-filter="person">Người <b data-ai-count="person">0</b></button>
-            <button class="filter-chip" data-ai-filter="vehicle">Phương tiện <b data-ai-count="vehicle">0</b></button>
-            <button class="filter-chip" data-ai-filter="other">Đối tượng khác <b data-ai-count="other">0</b></button>
-            <select class="select" id="ss-ai-event-filter"><option value="all">Mọi loại sự kiện</option><option value="intrusion">Xâm nhập (Critical)</option><option value="person">Phát hiện người</option><option value="fire">Cháy / Khói</option><option value="object">Đối tượng khác</option></select>
-            <input class="filter-search" id="ss-ai-search" placeholder="Tìm camera hoặc đối tượng...">
+            <button class="filter-chip" data-ai-filter="fire">Lửa (Fire) <b data-ai-count="fire">0</b></button>
+            <button class="filter-chip" data-ai-filter="smoke">Khói (Smoke) <b data-ai-count="smoke">0</b></button>
+            <button class="filter-chip" data-ai-filter="other">Khác <b data-ai-count="other">0</b></button>
+            <select class="select" id="ss-ai-camera-filter"><option value="all">Tất cả Camera</option></select>
+            <select class="select" id="ss-ai-event-filter"><option value="all">Mọi loại sự kiện</option><option value="fire">Lửa / Cháy (CRITICAL)</option><option value="smoke">Khói (WARNING / CRITICAL)</option><option value="other">Sự kiện khác</option></select>
+            <select class="select" id="ss-ai-conf-filter"><option value="0">Mọi độ tin cậy</option><option value="0.5">Tin cậy ≥ 50%</option><option value="0.7">Tin cậy ≥ 70%</option><option value="0.8">Tin cậy ≥ 80%</option><option value="0.9">Tin cậy ≥ 90%</option></select>
+            <input class="filter-search" id="ss-ai-search" placeholder="Tìm camera hoặc Lửa/Khói...">
           </div>
           <div class="ai-grid"><div style="color:#64748b;padding:24px"><span class="dot offline"></span>Tạm thời chưa hoạt động — Chưa kết nối luồng Camera RTSP với AI Worker (YOLOv8).</div></div>
-          <div class="table-foot"><span>Tổng cộng 0 sự kiện</span><div class="pages"><button class="active">1</button></div></div>
+          <article class="panel" style="margin-top:16px">
+            <div class="panel-head">
+              <div><div class="panel-title">Bảng sự kiện nhận diện AI</div><div class="panel-note">Nhấn vào từng thẻ ảnh hoặc nút Chi tiết để xem đầy đủ thông tin từ API <code>GET /api/detections/:id</code>.</div></div>
+              <span class="updated" id="ss-ai-realtime-note">Đồng bộ WebSocket: detection.created</span>
+            </div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead><tr><th>ID</th><th>Snapshot</th><th>Camera</th><th>Đối tượng</th><th>Loại sự kiện</th><th>Độ tin cậy</th><th>Thời gian</th><th>Thao tác</th></tr></thead>
+                <tbody id="ss-ai-table-body"><tr><td colspan="8" style="text-align:center;color:#64748b;padding:20px">Chưa có sự kiện AI nào được ghi nhận.</td></tr></tbody>
+              </table>
+            </div>
+            <div class="table-foot"><span>Tổng cộng 0 sự kiện</span><div class="pages"><button class="active">1</button></div></div>
+          </article>
         </section>
 
         <!-- 4. IOT DEVICES -->
@@ -132,17 +146,17 @@
               </div>
               <div class="sensor-grid">
                 <div class="sensor-card">
-                  <div class="sensor-icon"><i data-lucide="scan-line"></i></div>
+                  <div class="sensor-icon" style="background:#fef2f2;color:#dc2626;border-color:#fecaca"><i data-lucide="flame"></i></div>
                   <div class="sensor-body">
-                    <div class="sensor-top-row"><h3>Cảm biến chuyển động PIR</h3><span class="sensor-reading" id="ss-pir-val" style="color:#64748b">(—)</span></div>
-                    <p id="ss-pir-desc">Chưa kết nối cảm biến PIR phần cứng</p>
+                    <div class="sensor-top-row"><h3>Cảm biến Lửa (Flame IR)</h3><span class="sensor-reading" id="ss-pir-val" style="color:#64748b">(—)</span></div>
+                    <p id="ss-pir-desc">Chưa kết nối cảm biến lửa phần cứng (GPIO 27)</p>
                   </div>
                   <span class="status unknown" id="ss-pir-status"><span class="dot offline"></span>Tạm thời chưa hoạt động</span>
                 </div>
                 <div class="sensor-card">
                   <div class="sensor-icon" style="background:#fffbeb;color:#d97706;border-color:#fde68a"><i data-lucide="wind"></i></div>
                   <div class="sensor-body">
-                    <div class="sensor-top-row"><h3>Cảm biến khí gas MQ-2</h3><span class="sensor-reading" id="ss-mq2-val" style="color:#64748b">(— <small>ppm</small>)</span></div>
+                    <div class="sensor-top-row"><h3>Cảm biến Khói / Khí gas MQ-2</h3><span class="sensor-reading" id="ss-mq2-val" style="color:#64748b">(— <small>ppm</small>)</span></div>
                     <p id="ss-mq2-threshold-label">Ngưỡng cảnh báo: 600 ppm</p>
                     <div class="confidence" style="display:none"><i id="ss-mq2-bar" style="width:0%;background:#94a3b8"></i></div>
                   </div>
@@ -151,19 +165,19 @@
                 <div class="sensor-card">
                   <div class="sensor-icon" style="background:#f1f5f9;color:#64748b;border-color:#e2e8f0"><i data-lucide="lock-keyhole"></i></div>
                   <div class="sensor-body">
-                    <div class="sensor-top-row"><h3>Mạch chấp hành Khóa & Relay</h3><span class="sensor-reading" id="ss-lock-val" style="color:#64748b">(—)</span></div>
-                    <p id="ss-relay-desc">Chưa kết nối mạch Relay / Còi / Khóa</p>
+                    <div class="sensor-top-row"><h3>Chấp hành PCCC (Relay &amp; Solenoid)</h3><span class="sensor-reading" id="ss-lock-val" style="color:#64748b">(—)</span></div>
+                    <p id="ss-relay-desc">Chưa kết nối Mạch Relay / Còi 12V / Khóa từ Solenoid</p>
                   </div>
                   <span class="status unknown" id="ss-actuator-status"><span class="dot offline"></span>Tạm thời chưa hoạt động</span>
                 </div>
               </div>
             </article>
             <article class="panel">
-              <div class="panel-head"><div><div class="panel-title">Điều khiển thiết bị</div><div class="panel-note">Gửi lệnh điều khiển tới mạch phần cứng ESP32</div></div><span class="status unknown" id="ss-iot-cmd-target"><span class="dot offline"></span>Tạm thời chưa hoạt động</span></div>
+              <div class="panel-head"><div><div class="panel-title">Điều khiển ứng cứu PCCC</div><div class="panel-note">Gửi lệnh điều khiển có xác nhận ACK tới mạch ESP32</div></div><span class="status unknown" id="ss-iot-cmd-target"><span class="dot offline"></span>Tạm thời chưa hoạt động</span></div>
               <div class="device-list">
-                <div class="device-row"><div class="device-icon"><i data-lucide="zap"></i></div><div class="device-copy"><strong>Relay · Đèn khu vực</strong><small id="ss-relay-state-text">Tạm thời chưa hoạt động (Chưa kết nối mạch ESP32)</small></div><button class="toggle" data-toggle="Relay" id="ss-toggle-relay" aria-label="Bật/tắt Relay"></button></div>
-                <div class="device-row"><div class="device-icon" style="color:#d97706;background:#fffbeb"><i data-lucide="volume-2"></i></div><div class="device-copy"><strong>Còi báo động</strong><small id="ss-buzzer-state-text">Tạm thời chưa hoạt động (Chưa kết nối mạch ESP32)</small></div><button class="toggle" data-toggle="Còi báo động" id="ss-toggle-buzzer" aria-label="Bật/tắt Còi báo động"></button></div>
-                <div class="device-row"><div class="device-icon" style="color:#64748b;background:#f1f5f9"><i data-lucide="lock-keyhole"></i></div><div class="device-copy"><strong>Khóa điện · Cửa chính</strong><small id="ss-lock-state-text">Tạm thời chưa hoạt động (Chưa kết nối mạch ESP32)</small></div><button class="btn" id="ss-btn-lock-toggle">Mở khóa</button></div>
+                <div class="device-row"><div class="device-icon" style="color:#2563eb;background:#eff6ff"><i data-lucide="droplets"></i></div><div class="device-copy"><strong>Mạch Relay · Bơm chữa cháy / Phun sương</strong><small id="ss-relay-state-text">Tạm thời chưa hoạt động (Chưa kết nối mạch ESP32)</small></div><button class="toggle" data-toggle="Relay Bơm chữa cháy" id="ss-toggle-relay" aria-label="Bật/tắt Mạch Relay bơm chữa cháy"></button></div>
+                <div class="device-row"><div class="device-icon" style="color:#d97706;background:#fffbeb"><i data-lucide="volume-2"></i></div><div class="device-copy"><strong>Còi báo động 12V</strong><small id="ss-buzzer-state-text">Tạm thời chưa hoạt động (Chưa kết nối mạch ESP32)</small></div><button class="toggle" data-toggle="Còi báo động 12V" id="ss-toggle-buzzer" aria-label="Bật/tắt Còi báo động 12V"></button></div>
+                <div class="device-row"><div class="device-icon" style="color:#dc2626;background:#fef2f2"><i data-lucide="door-open"></i></div><div class="device-copy"><strong>Khóa từ Solenoid · Cửa thoát hiểm</strong><small id="ss-lock-state-text">Tạm thời chưa hoạt động (Chưa kết nối mạch ESP32)</small></div><button class="btn" id="ss-btn-lock-toggle">Mở thoát hiểm</button></div>
               </div>
             </article>
           </div>
@@ -204,12 +218,13 @@
 
         <!-- 7. CAMERA MANAGEMENT -->
         <section class="view" data-page="cameras" hidden>
-          <div class="page-head"><div><div class="eyebrow">Thiết bị giám sát</div><h1>Quản lý Camera</h1><div class="subtitle">Danh sách camera và thông tin kết nối RTSP đã che mật khẩu.</div></div><div class="head-actions"><button class="btn primary" data-modal="camera" data-admin-only><i data-lucide="plus"></i>Thêm Camera</button></div></div>
+          <div class="page-head"><div><div class="eyebrow">Thiết bị giám sát</div><h1>Quản lý Camera</h1><div class="subtitle">Danh sách camera, mã định danh <code>camera_id</code> và thông tin kết nối RTSP đã che mật khẩu.</div></div><div class="head-actions"><button class="btn primary" data-modal="camera" data-admin-only><i data-lucide="plus"></i>Thêm Camera</button></div></div>
           <div class="filters">
             <input class="filter-search" id="ss-cam-mgmt-search" placeholder="Tìm theo tên, vị trí hoặc IP...">
+            <select class="select" id="ss-cam-mgmt-location"><option value="all">Tất cả khu vực</option></select>
             <select class="select" id="ss-cam-mgmt-status"><option value="all">Tất cả trạng thái</option><option value="ONLINE">Online</option><option value="OFFLINE">Offline</option></select>
           </div>
-          <article class="panel"><div class="table-wrap"><table class="table"><thead><tr><th>Camera</th><th>Vị trí</th><th>Địa chỉ kết nối</th><th>Trạng thái</th><th>Hoạt động gần nhất</th><th>Thao tác</th></tr></thead><tbody><tr><td colspan="6" style="text-align:center;color:#64748b;padding:20px">Chưa có camera nào trong cơ sở dữ liệu.</td></tr></tbody></table></div><div class="table-foot"><span>Tổng cộng 0 camera</span><div class="pages"><button class="active">1</button></div></div></article>
+          <article class="panel"><div class="table-wrap"><table class="table"><thead><tr><th>ID</th><th>Camera</th><th>Vị trí</th><th>Địa chỉ kết nối (RTSP)</th><th>Trạng thái</th><th>Hoạt động gần nhất</th><th>Thao tác</th></tr></thead><tbody><tr><td colspan="7" style="text-align:center;color:#64748b;padding:20px">Chưa có camera nào trong cơ sở dữ liệu.</td></tr></tbody></table></div><div class="table-foot"><span>Tổng cộng 0 camera</span><div class="pages"><button class="active">1</button></div></div></article>
         </section>
 
         <!-- 8. USER MANAGEMENT -->
@@ -227,29 +242,29 @@
 
         <!-- 9. SYSTEM STATUS -->
         <section class="view" data-page="system" hidden>
-          <div class="page-head"><div><div class="eyebrow">Hạ tầng & kết nối</div><h1>Trạng thái hệ thống</h1><div class="subtitle">Tình trạng thực tế của các dịch vụ phần mềm và phần cứng ngoại vi.</div></div><div class="head-actions"><span class="updated" id="ss-sys-updated">Đang kiểm tra...</span><button class="btn" data-action="refresh"><i data-lucide="refresh-cw"></i>Kiểm tra lại</button></div></div>
+          <div class="page-head"><div><div class="eyebrow">Hạ tầng Mạng VLAN · VPN · Docker</div><h1>Trạng thái hệ thống</h1><div class="subtitle">Tình trạng thực tế của các dịch vụ Backend Rust, MediaMTX RTSP, Edge AI YOLOv8, WireGuard VPN và ESP32 PCCC.</div></div><div class="head-actions"><span class="updated" id="ss-sys-updated">Đang kiểm tra...</span><button class="btn" data-action="refresh"><i data-lucide="refresh-cw"></i>Kiểm tra lại</button></div></div>
           <div class="service-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-            <div class="service"><div class="service-head"><i class="service-ico"><i data-lucide="server"></i></i><div><strong>Backend API</strong><small>FastAPI REST · :8000</small></div></div><div class="service-state" id="ss-sys-api"><span class="dot"></span>Hoạt động</div></div>
-            <div class="service"><div class="service-head"><i class="service-ico" style="color:#16a34a;background:#f0fdf4"><i data-lucide="database"></i></i><div><strong>PostgreSQL</strong><small>Database · :5432</small></div></div><div class="service-state" id="ss-sys-db"><span class="dot"></span>Hoạt động</div></div>
-            <div class="service"><div class="service-head"><i class="service-ico" style="color:#64748b;background:#f1f5f9"><i data-lucide="shield"></i></i><div><strong>WireGuard VPN</strong><small>Security Tunnel</small></div></div><div class="service-state" id="ss-sys-vpn"><span class="dot offline"></span>Tạm thời chưa hoạt động</div></div>
-            <div class="service"><div class="service-head"><i class="service-ico" style="color:#64748b;background:#f1f5f9"><i data-lucide="radio"></i></i><div><strong>MQTT & Mạch ESP32</strong><small id="ss-sys-dev-sub">Chưa kết nối phần cứng</small></div></div><div class="service-state" id="ss-sys-dev"><span class="dot offline"></span>Tạm thời chưa hoạt động</div></div>
-            <div class="service"><div class="service-head"><i class="service-ico" style="color:#64748b;background:#f1f5f9"><i data-lucide="camera"></i></i><div><strong>Luồng Camera RTSP</strong><small id="ss-sys-cam-sub">Chưa kết nối camera thật</small></div></div><div class="service-state" id="ss-sys-cam"><span class="dot offline"></span>Tạm thời chưa hoạt động</div></div>
-            <div class="service"><div class="service-head"><i class="service-ico" style="color:#64748b;background:#f1f5f9"><i data-lucide="scan-eye"></i></i><div><strong>AI Worker (YOLOv8)</strong><small>Nhận diện luồng RTSP</small></div></div><div class="service-state" id="ss-sys-ai"><span class="dot offline"></span>Tạm thời chưa hoạt động</div></div>
+            <div class="service"><div class="service-head"><i class="service-ico"><i data-lucide="server"></i></i><div><strong>Backend API</strong><small>Rust Axum REST · :8000</small></div></div><div class="service-state" id="ss-sys-api"><span class="dot"></span>Hoạt động</div></div>
+            <div class="service"><div class="service-head"><i class="service-ico" style="color:#16a34a;background:#f0fdf4"><i data-lucide="database"></i></i><div><strong>PostgreSQL</strong><small>Database &amp; Grafana · :5432</small></div></div><div class="service-state" id="ss-sys-db"><span class="dot"></span>Hoạt động</div></div>
+            <div class="service"><div class="service-head"><i class="service-ico" style="color:#64748b;background:#f1f5f9"><i data-lucide="shield"></i></i><div><strong>WireGuard VPN</strong><small>Security Tunnel · :51820/UDP</small></div></div><div class="service-state" id="ss-sys-vpn"><span class="dot offline"></span>Tạm thời chưa hoạt động</div></div>
+            <div class="service"><div class="service-head"><i class="service-ico" style="color:#64748b;background:#f1f5f9"><i data-lucide="radio"></i></i><div><strong>MQTT &amp; Mạch ESP32 PCCC</strong><small id="ss-sys-dev-sub">Chưa kết nối phần cứng</small></div></div><div class="service-state" id="ss-sys-dev"><span class="dot offline"></span>Tạm thời chưa hoạt động</div></div>
+            <div class="service"><div class="service-head"><i class="service-ico" style="color:#64748b;background:#f1f5f9"><i data-lucide="camera"></i></i><div><strong>Luồng Camera RTSP (MediaMTX)</strong><small id="ss-sys-cam-sub">Chưa kết nối camera thật</small></div></div><div class="service-state" id="ss-sys-cam"><span class="dot offline"></span>Tạm thời chưa hoạt động</div></div>
+            <div class="service"><div class="service-head"><i class="service-ico" style="color:#64748b;background:#f1f5f9"><i data-lucide="flame"></i></i><div><strong>AI Worker (YOLOv8 Lửa/Khói)</strong><small>Stream Processor ONNX · :8001</small></div></div><div class="service-state" id="ss-sys-ai"><span class="dot offline"></span>Tạm thời chưa hoạt động</div></div>
           </div>
         </section>
 
         <!-- 10. SYSTEM SETTINGS -->
         <section class="view" data-page="settings" hidden>
-          <div class="page-head"><div><div class="eyebrow">Vận hành nền tảng</div><h1>Cài đặt hệ thống</h1><div class="subtitle">Cấu hình ngưỡng cảnh báo, thông báo, lưu trữ và thông tin phiên bản.</div></div><div class="head-actions"><button class="btn primary" id="ss-save-settings" data-admin-only><i data-lucide="save"></i>Lưu cài đặt</button></div></div>
+          <div class="page-head"><div><div class="eyebrow">Vận hành nền tảng PCCC</div><h1>Cài đặt hệ thống</h1><div class="subtitle">Cấu hình ngưỡng báo cháy MQ-2, độ tin cậy YOLOv8 Lửa/Khói, thông báo và lưu trữ.</div></div><div class="head-actions"><button class="btn primary" id="ss-save-settings" data-admin-only><i data-lucide="save"></i>Lưu cài đặt</button></div></div>
           <div class="grid-equal">
-            <article class="panel"><div class="panel-head"><div><div class="panel-title">Thông tin hệ thống</div><div class="panel-note">Thông số nền tảng SmartSecure</div></div><span class="status online">Đang vận hành</span></div><div class="settings-list"><div><span>Tên hệ thống</span><strong>SmartSecure</strong></div><div><span>Phiên bản</span><strong>v1.0.0</strong></div><div><span>Môi trường</span><strong>Docker Compose</strong></div><div><span>Múi giờ</span><select class="select" id="ss-set-tz"><option value="Asia/Ho_Chi_Minh">(GMT+07:00) Hà Nội</option><option value="UTC">(GMT+00:00) UTC</option></select></div><div><span>Ngôn ngữ giao diện</span><select class="select" id="ss-set-lang"><option value="vi">Tiếng Việt</option><option value="en">English</option></select></div></div></article>
-            <article class="panel"><div class="panel-head"><div><div class="panel-title">Cài đặt ngưỡng cảnh báo</div><div class="panel-note">Áp dụng trực tiếp cho AI Detection và cảm biến MQ-2</div></div></div>
+            <article class="panel"><div class="panel-head"><div><div class="panel-title">Thông tin hệ thống</div><div class="panel-note">Thông số nền tảng SmartSecure PCCC</div></div><span class="status online">Đang vận hành</span></div><div class="settings-list"><div><span>Tên hệ thống</span><strong>SmartSecure PCCC</strong></div><div><span>Phiên bản</span><strong>v1.0.0 (Rust)</strong></div><div><span>Môi trường</span><strong>Docker Compose</strong></div><div><span>Múi giờ</span><select class="select" id="ss-set-tz"><option value="Asia/Ho_Chi_Minh">(GMT+07:00) Hà Nội</option><option value="UTC">(GMT+00:00) UTC</option></select></div><div><span>Ngôn ngữ giao diện</span><select class="select" id="ss-set-lang"><option value="vi">Tiếng Việt</option><option value="en">English</option></select></div></div></article>
+            <article class="panel"><div class="panel-head"><div><div class="panel-title">Cài đặt ngưỡng báo cháy PCCC</div><div class="panel-note">Áp dụng trực tiếp cho YOLOv8 (Lửa/Khói) và cảm biến khói/gas MQ-2</div></div></div>
               <div class="settings-list">
-                <div><span>MQ-2 · Ngưỡng khí gas (ppm)</span><input type="number" id="ss-set-mq2" class="filter-search" style="width:110px;padding:6px 10px" value="600" min="50" max="10000"></div>
-                <div><span>Độ tin cậy AI tối thiểu (%)</span><input type="number" id="ss-set-conf" class="filter-search" style="width:110px;padding:6px 10px" value="80" min="10" max="100"></div>
+                <div><span>MQ-2 · Ngưỡng khói / khí gas (ppm)</span><input type="number" id="ss-set-mq2" class="filter-search" style="width:110px;padding:6px 10px" value="600" min="50" max="10000"></div>
+                <div><span>Độ tin cậy YOLOv8 tối thiểu (%)</span><input type="number" id="ss-set-conf" class="filter-search" style="width:110px;padding:6px 10px" value="60" min="10" max="100"></div>
                 <div><span>Thời gian gộp cảnh báo trùng (giây)</span><input type="number" id="ss-set-dedup" class="filter-search" style="width:110px;padding:6px 10px" value="60" min="0" max="3600"></div>
-                <div><span>Cảnh báo người ngoài giờ</span><button class="toggle on" data-pref="after_hours_alert" aria-label="Bật cảnh báo ngoài giờ"></button></div>
-                <div><span>Cảnh báo thiết bị ngoại tuyến</span><button class="toggle on" data-pref="offline_device_alert" aria-label="Bật cảnh báo thiết bị ngoại tuyến"></button></div>
+                <div><span>Cảnh báo cháy khẩn cấp ngoài giờ</span><button class="toggle on" data-pref="after_hours_alert" aria-label="Bật cảnh báo cháy ngoài giờ"></button></div>
+                <div><span>Cảnh báo thiết bị ESP32 ngoại tuyến</span><button class="toggle on" data-pref="offline_device_alert" aria-label="Bật cảnh báo thiết bị ngoại tuyến"></button></div>
               </div>
             </article>
           </div>
@@ -277,7 +292,7 @@
 </div>
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
 <script>if (window.lucide) window.lucide.createIcons();</script>
-<script src="js/app.js?v=10"></script>
-<script src="js/api.js?v=10"></script>
+<script src="js/app.js?v=12"></script>
+<script src="js/api.js?v=12"></script>
 </body>
 </html>

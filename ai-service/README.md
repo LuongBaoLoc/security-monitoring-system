@@ -1,26 +1,33 @@
-# AI Detection Service (Rust - Axum)
+# AI Detection Service — Stream Processor YOLOv8 Lửa & Khói (Rust)
 
-Dịch vụ AI viết bằng **Rust (`axum`, `tokio`, `image`, `reqwest`)** nhận khung hình tại `POST /detect?camera_id=...`, xử lý nhận diện đối tượng (YOLO pipeline), sau đó gửi các sự kiện phát hiện về Backend qua `POST /api/detections`.
+Dịch vụ Edge AI viết bằng **Rust (`axum`, `tokio`, `tract-onnx`, `image`, `reqwest`)** chuyên nhận diện **Lửa (`fire`)** và **Khói (`smoke`)** thời gian thực cho hệ thống **Phòng cháy Chữa cháy thông minh (PCCC)**. Chạy trực tiếp tại biên trên **Jetson Nano**, **PC có GPU Nvidia GTX 1650+** hoặc **CPU** mà không cần môi trường Python nặng.
 
-## Cấu trúc thư mục
+## Cấu trúc Thư mục
 
-- `Cargo.toml`: Khai báo crate `security-monitoring-ai-service` và binary CLI `test_yolo_sample`.
-- `src/main.rs`: Axum HTTP server cung cấp endpoint `GET /health` và `POST /detect`.
-- `src/camera.rs`: Hàm chụp 1 khung hình JPEG từ file/luồng RTSP (`capture_frame_bytes`) và sinh ảnh mẫu thử nghiệm (`create_sample_test_image`).
-- `src/detector.rs`: Giải mã ảnh và trích xuất danh sách đối tượng (`object_type`, `confidence`, `event_type`).
-- `src/event_handler.rs`: Gửi JSON sự kiện phát hiện sang Backend kèm `AI_SERVICE_TOKEN`.
-- `src/bin/test_yolo_sample.rs`: Binary CLI kiểm thử đọc frame và chạy inference YOLO trên ảnh mẫu (đầu ra Tuần 3 – Tuần 4).
+- `Cargo.toml`: Khai báo crate `security-monitoring-ai-service` (`tract-onnx`, `url`, `chrono`) và CLI kiểm thử `test_yolo_sample`.
+- `src/config.rs`: Đọc biến môi trường (`MODEL_PATH`, `YOLO_CLASSES=fire,smoke`, `CONFIDENCE_THRESHOLD`, `NMS_IOU_THRESHOLD`, `FFMPEG_TIMEOUT_SECS`, `RTSP_SERVER_URL`).
+- `src/main.rs`: HTTP server cổng `8001` cung cấp `GET /health` và `POST /detect?camera_id=...` (xác thực `AI_SERVICE_TOKEN`, chạy suy luận ONNX trên `spawn_blocking`, tự động upload ảnh snapshot và gửi sự kiện cháy/khói sang Backend).
+- `src/camera.rs`: Trích xuất khung hình JPEG từ Camera IP RTSP / **RTSP Simple Server (MediaMTX)** / Webcam USB qua `ffmpeg` kèm giới hạn thời gian (`FFMPEG_TIMEOUT_SECS`) và tự động che `user:password` trong mọi log lỗi (`redact_rtsp_url`, `sanitize_rtsp_log`).
+- `src/detector.rs`: Suy luận **YOLOv8 Nano / Small (ONNX)** qua `tract-onnx` (letterbox 640×640, lọc ngưỡng tin cậy, Non-Maximum Suppression theo lớp, ánh xạ nhãn `fire` / `smoke`).
+- `src/event_handler.rs`: Lấy ánh xạ RTSP gốc qua `GET /api/internal/cameras/mappings`, tải ảnh snapshot lên `POST /api/detections/snapshot` và gửi sự kiện đầy đủ về `POST /api/detections`.
+- `src/bin/test_yolo_sample.rs`: Công cụ CLI kiểm thử trọn luồng ảnh/RTSP/MediaMTX → YOLOv8 ONNX → upload snapshot → Backend API.
 
-## Cài đặt & chạy thử bằng Cargo
+## Chuẩn bị Model & Chạy thử bằng Cargo
+
+```bash
+# Xuất model YOLOv8 Lửa & Khói sang định dạng ONNX (640x640) và đặt vào models/
+yolo export model=yolov8n_fire_smoke.pt format=onnx imgsz=640
+```
 
 ```powershell
 cd ai-service
 
-# Chạy dịch vụ AI HTTP Server trên cổng 8001
+# Chạy AI Service HTTP Server trên cổng 8001
 cargo run --bin security-monitoring-ai-service
 
-# Chạy thử nghiệm pipeline YOLO với ảnh mẫu tự sinh (hoặc truyền --image / --rtsp)
-cargo run --bin test_yolo_sample
-cargo run --bin test_yolo_sample -- --image path/to/sample.jpg
-cargo run --bin test_yolo_sample -- --rtsp rtsp://192.168.1.21:554/stream1
+# Kiểm thử trọn luồng ảnh cháy/khói -> YOLOv8 ONNX -> Upload snapshot -> Backend API
+cargo run --bin test_yolo_sample -- --image path/to/fire_sample.jpg --camera-id 1 --submit
+
+# Lấy RTSP nội bộ từ Backend (hoặc truyền --rtsp rtsp://mediamtx:8554/cam1) rồi gửi sự kiện
+cargo run --bin test_yolo_sample -- --fetch-mapping --camera-id 1 --submit
 ```

@@ -166,3 +166,38 @@ pub async fn admin_user(headers: &HeaderMap, state: &AppState) -> Result<User, A
     }
     Ok(user)
 }
+
+/// So sánh 2 chuỗi bí mật với thời gian không phụ thuộc vị trí ký tự sai (chống timing attack).
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Kiểm tra header `Authorization: Bearer <AI_SERVICE_TOKEN>` (dùng cho AI Service gọi API nội bộ).
+/// Trả về `false` nếu Backend chưa cấu hình `AI_SERVICE_TOKEN`.
+pub fn is_valid_ai_service_token(headers: &HeaderMap, settings: &Settings) -> bool {
+    let expected = settings.ai_service_token.trim();
+    if expected.is_empty() {
+        return false;
+    }
+    match extract_bearer_token(headers) {
+        Some(token) => constant_time_eq(token.as_bytes(), expected.as_bytes()),
+        None => false,
+    }
+}
+
+/// Bắt buộc request nội bộ phải mang đúng `AI_SERVICE_TOKEN` (fail-closed nếu chưa cấu hình).
+pub fn require_ai_service_token(headers: &HeaderMap, settings: &Settings) -> Result<(), ApiError> {
+    if settings.ai_service_token.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "AI_SERVICE_TOKEN chưa được cấu hình trên Backend",
+        ));
+    }
+    if !is_valid_ai_service_token(headers, settings) {
+        return Err(ApiError::unauthorized("Invalid AI service token"));
+    }
+    Ok(())
+}

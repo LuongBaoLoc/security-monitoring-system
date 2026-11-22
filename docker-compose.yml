@@ -1,4 +1,5 @@
 services:
+  # ==================== STACK CỐT LÕI (MẶC ĐỊNH) ====================
   db:
     image: postgres:16-alpine
     environment:
@@ -34,6 +35,7 @@ services:
       MQTT_ENABLED: "true"
       MQTT_HOST: mqtt
       MQTT_PORT: 1883
+      WIREGUARD_ACTIVE: ${WIREGUARD_ACTIVE:-false}
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
     depends_on:
@@ -41,6 +43,8 @@ services:
         condition: service_healthy
       mqtt:
         condition: service_started
+    volumes:
+      - ./backend/uploads:/app/uploads
     ports:
       - "8000:8000"
 
@@ -59,8 +63,12 @@ services:
     environment:
       BACKEND_URL: http://backend:8000
       AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
-      MODEL_PATH: ${MODEL_PATH:-}
+      MODEL_PATH: ${MODEL_PATH:-/models/yolov8n_fire_smoke.onnx}
+      YOLO_CLASSES: ${YOLO_CLASSES:-fire,smoke}
       CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.6}
+      NMS_IOU_THRESHOLD: ${NMS_IOU_THRESHOLD:-0.45}
+      FFMPEG_TIMEOUT_SECS: ${FFMPEG_TIMEOUT_SECS:-10}
+      RTSP_SERVER_URL: ${RTSP_SERVER_URL:-rtsp://mediamtx:8554}
     volumes:
       - ./models:/models:ro
     depends_on:
@@ -68,5 +76,58 @@ services:
     ports:
       - "8001:8001"
 
+  # ==================== DỊCH VỤ HẠ TẦNG MỞ RỘNG (PROFILES) ====================
+  # Bật RTSP Simple Server (MediaMTX): docker compose --profile rtsp up -d
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    profiles: ["rtsp", "full"]
+    environment:
+      MTX_PROTOCOLS: tcp
+      MTX_RTSPADDRESS: :8554
+      MTX_HLSADDRESS: :8888
+    ports:
+      - "8554:8554"
+      - "8888:8888"
+
+  # Bật WireGuard VPN Server Container: docker compose --profile vpn up -d
+  wireguard:
+    image: lscr.io/linuxserver/wireguard:latest
+    profiles: ["vpn", "full"]
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: Asia/Ho_Chi_Minh
+      SERVERURL: ${WIREGUARD_SERVERURL:-auto}
+      SERVERPORT: ${WIREGUARD_PORT:-51820}
+      PEERS: ${WIREGUARD_PEERS:-admin,operator1}
+      PEERDNS: auto
+      INTERNAL_SUBNET: ${WIREGUARD_SUBNET:-10.13.13.0}
+    volumes:
+      - ./wireguard/config:/config
+    ports:
+      - "${WIREGUARD_PORT:-51820}:51820/udp"
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  # Bật Dashboard Grafana (trực quan hóa cảm biến MQ-2 & sự cố PCCC): docker compose --profile monitoring up -d
+  grafana:
+    image: grafana/grafana:11.3.0
+    profiles: ["monitoring", "full"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-replace-with-grafana-password}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+
 volumes:
   postgres_data:
+  grafana_data:
